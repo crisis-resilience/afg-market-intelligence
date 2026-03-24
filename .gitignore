@@ -35,21 +35,15 @@ analysis.log
 
 # Environment variables
 .env
-.env.local
-
-# Data files (for privacy/security)
+.env.local# Data files (for privacy/security)
 raw_*.csv
-output/raw_*.csv
-
-# API keys and secrets
+output/raw_*.csv# API keys and secrets
 secrets.json
 config/secrets.json
 
 # Build files
 dist/
-build/
-
-# Test files
+build/# Test files
 test_*.py
 test_*.html
 debug_*.py
