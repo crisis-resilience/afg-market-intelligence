@@ -1,68 +1,205 @@
 """
-Configuration file for Afghanistan Trade Intelligence Tool
+Configuration for Afghanistan Trade Intelligence Tool.
+This file is the single source of truth for product definitions.
+The ETL pipeline seeds the database from PRODUCTS on each run.
 """
 
-# Afghanistan country code
 AFGHANISTAN_CODE = 'AFG'
+AFGHANISTAN_NUMERIC = '4'
 
-# Year range for analysis (past 4 years for more data)
 YEARS = [2021, 2022, 2023, 2024]
 
-# Number of top markets to analyze (expanded for comprehensive analysis)
 TOP_N_MARKETS = 10
 
-# UN Comtrade API configuration
-# Note: UN Comtrade uses HS codes (Harmonized System)
-# HS codes can be specified with or without dots (e.g., 080211 or 0802.11)
-# Comtrade typically uses 6-digit HS codes
+# Price competitiveness thresholds (% difference vs market average)
+PRICE_COMPETITIVENESS = {
+    'highly_competitive': -10,   # more than 10% below market avg
+    'competitive': 0,            # up to 10% below market avg
+    'average': 10,               # within 10% above market avg
+    # above 10% → 'Above Market'
+}
 
-# Product definitions with individual HS codes
-# Note: UN Comtrade accepts HS codes in various formats
-# Each HS code is now analyzed separately for more precise insights
+# Products keyed by primary HS code (6-digit, no dots).
+# 'codes' lists all HS codes that roll up into one product entry.
 PRODUCTS = {
+    # ── Tree nuts ──────────────────────────────────────────────────────────
     'Almonds In-Shell': {
         'codes': ['080211'],
+        'category': 'Tree Nuts',
         'description': 'Almonds, in-shell (fresh or dried)',
-        'hs_codes_with_dots': ['0802.11']
     },
     'Almonds Shelled': {
         'codes': ['080212'],
+        'category': 'Tree Nuts',
         'description': 'Almonds, shelled (fresh or dried)',
-        'hs_codes_with_dots': ['0802.12']
     },
+    'Walnuts In-Shell': {
+        'codes': ['080231'],
+        'category': 'Tree Nuts',
+        'description': 'Walnuts, in-shell',
+    },
+    'Walnuts Shelled': {
+        'codes': ['080232'],
+        'category': 'Tree Nuts',
+        'description': 'Walnuts, shelled',
+    },
+    'Pistachios In-Shell': {
+        'codes': ['080253'],
+        'category': 'Tree Nuts',
+        'description': 'Pistachios, in-shell',
+    },
+    'Pistachios Shelled': {
+        'codes': ['080254'],
+        'category': 'Tree Nuts',
+        'description': 'Pistachios, shelled',
+    },
+    'Pine Nuts': {
+        'codes': ['080290'],
+        'category': 'Tree Nuts',
+        'description': 'Other nuts, fresh or dried (incl. pine nuts)',
+    },
+
+    # ── Spices & herbs ─────────────────────────────────────────────────────
     'Saffron': {
         'codes': ['091020'],
+        'category': 'Spices & Herbs',
         'description': 'Saffron (stigmas, crushed or ground)',
-        'hs_codes_with_dots': ['0910.20']
     },
+    'Cumin Seeds': {
+        'codes': ['090920'],
+        'category': 'Spices & Herbs',
+        'description': 'Cumin seeds',
+    },
+    'Fenugreek': {
+        'codes': ['121190'],
+        'category': 'Spices & Herbs',
+        'description': 'Fenugreek and other plants used in pharmacy/perfumery',
+    },
+    'Asafoetida': {
+        'codes': ['130219'],
+        'category': 'Spices & Herbs',
+        'description': 'Other vegetable saps and extracts (incl. asafoetida/hing)',
+    },
+    'Liquorice Root': {
+        'codes': ['121110'],
+        'category': 'Spices & Herbs',
+        'description': 'Liquorice roots',
+    },
+
+    # ── Dried fruits ───────────────────────────────────────────────────────
+    'Dried Grapes (Raisins)': {
+        'codes': ['080620'],
+        'category': 'Dried Fruits',
+        'description': 'Dried grapes, including raisins and sultanas',
+    },
+    'Dried Apricots': {
+        'codes': ['081310'],
+        'category': 'Dried Fruits',
+        'description': 'Dried apricots',
+    },
+    'Dried Figs': {
+        'codes': ['080420'],
+        'category': 'Dried Fruits',
+        'description': 'Dried figs',
+    },
+    'Dried Pomegranate': {
+        'codes': ['081390'],
+        'category': 'Dried Fruits',
+        'description': 'Other dried fruits (incl. dried pomegranate)',
+    },
+    'Dried Mulberries': {
+        'codes': ['081320'],
+        'category': 'Dried Fruits',
+        'description': 'Dried prunes and mulberries',
+    },
+
+    # ── Fresh fruits ───────────────────────────────────────────────────────
     'Fresh Grapes': {
         'codes': ['080610'],
-        'description': 'Fresh Grapes',
-        'hs_codes_with_dots': ['0806.10']
+        'category': 'Fresh Fruits',
+        'description': 'Fresh grapes',
     },
-    'Dried Grapes': {
-        'codes': ['080620'],
-        'description': 'Dried Grapes (including Raisins/Sultanas)',
-        'hs_codes_with_dots': ['0806.20']
+    'Fresh Pomegranate': {
+        'codes': ['081080'],
+        'category': 'Fresh Fruits',
+        'description': 'Other fresh fruit (incl. pomegranate)',
     },
+    'Melons': {
+        'codes': ['080790'],
+        'category': 'Fresh Fruits',
+        'description': 'Other melons (fresh)',
+    },
+    'Apricots': {
+        'codes': ['080910'],
+        'category': 'Fresh Fruits',
+        'description': 'Fresh apricots',
+    },
+
+    # ── Carpets & textiles ─────────────────────────────────────────────────
     'Knotted Carpets': {
         'codes': ['570110'],
-        'description': 'Knotted Carpets (wool/fine animal hair, hand-woven)',
-        'hs_codes_with_dots': ['5701.10']
+        'category': 'Carpets & Textiles',
+        'description': 'Knotted carpets of wool or fine animal hair (hand-made)',
     },
     'Woven Carpets': {
         'codes': ['570210'],
-        'description': 'Woven Carpets (wool/fine animal hair, hand-woven)',
-        'hs_codes_with_dots': ['5702.10']
+        'category': 'Carpets & Textiles',
+        'description': 'Woven carpets of wool or fine animal hair (hand-made)',
     },
+    'Kilims': {
+        'codes': ['570391'],
+        'category': 'Carpets & Textiles',
+        'description': 'Kelim, sumak, karamanie and similar flat-woven rugs',
+    },
+
+    # ── Luxury fibres ──────────────────────────────────────────────────────
     'Raw Cashmere': {
         'codes': ['510211'],
-        'description': 'Cashmere hair of Kashmir goats, raw',
-        'hs_codes_with_dots': ['5102.11']
+        'category': 'Luxury Fibres',
+        'description': 'Cashmere (Kashmir goat hair), not carded or combed',
+    },
+    'Processed Cashmere': {
+        'codes': ['510212'],
+        'category': 'Luxury Fibres',
+        'description': 'Cashmere (Kashmir goat hair), carded or combed',
     },
     'Cashmere Sweaters': {
         'codes': ['611012'],
-        'description': 'Cashmere sweaters, pullovers, cardigans (wool/fine animal hair)',
-        'hs_codes_with_dots': ['6110.12']
-    }
+        'category': 'Luxury Fibres',
+        'description': 'Sweaters/pullovers of cashmere (fine animal hair)',
+    },
+    'Karakul Sheepskin': {
+        'codes': ['410510'],
+        'category': 'Luxury Fibres',
+        'description': 'Tanned or dressed sheepskin leather',
+    },
+
+    # ── Minerals & stones ──────────────────────────────────────────────────
+    'Lapis Lazuli': {
+        'codes': ['711299'],
+        'category': 'Minerals & Stones',
+        'description': 'Precious/semi-precious stones (incl. lapis lazuli), unworked',
+    },
+    'Marble & Travertine': {
+        'codes': ['251621'],
+        'category': 'Minerals & Stones',
+        'description': 'Marble and travertine, crude or rough',
+    },
+    'Talc': {
+        'codes': ['252620'],
+        'category': 'Minerals & Stones',
+        'description': 'Talc, crushed or powdered',
+    },
+
+    # ── Oilseeds ───────────────────────────────────────────────────────────
+    'Sesame Seeds': {
+        'codes': ['120740'],
+        'category': 'Oilseeds',
+        'description': 'Sesame seeds',
+    },
+    'Flaxseed / Linseed': {
+        'codes': ['120400'],
+        'category': 'Oilseeds',
+        'description': 'Linseed (flaxseed), whether or not broken',
+    },
 }
