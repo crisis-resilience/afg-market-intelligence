@@ -7,12 +7,20 @@ API client and the DB loader.
 """
 
 import logging
+import math
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from config import AFGHANISTAN_NUMERIC, PRICE_COMPETITIVENESS
+from config import (
+    DISTANCE_FROM_KABUL_KM,
+    FTA_STATUS,
+    LANGUAGE_SIMILARITY,
+    LANGUAGE_SIMILARITY_DEFAULT,
+    OPPORTUNITY_SCORE_WEIGHTS,
+    PRICE_COMPETITIVENESS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -303,3 +311,143 @@ def _price_competitiveness(
             label = "Above Market"
 
     return market_avg, pct_diff, label
+
+
+# ── Opportunity score ─────────────────────────────────────────────────────────
+
+def enrich_indicators_with_scores(
+    indicator_rows: list[dict],
+    market_context: dict[str, dict],  # {country_code: {year: {field: value}}}
+    all_market_sizes: dict[str, float],  # {market_code: global_market_size_usd latest year}
+) -> list[dict]:
+    """
+    Attach opportunity scores to already-computed indicator rows.
+
+    Each row in indicator_rows is mutated in place (new keys added) and returned.
+    market_context is keyed by Comtrade numeric country code → year → field.
+    all_market_sizes provides cross-market normalisation for the size dimension.
+    """
+    if not indicator_rows:
+        return indicator_rows
+
+    weights = OPPORTUNITY_SCORE_WEIGHTS
+
+    # Pre-compute log-normalised market size across all markets for this product
+    sizes = [v for v in all_market_sizes.values() if v and v > 0]
+    log_max = math.log1p(max(sizes)) if sizes else 1.0
+
+    for row in indicator_rows:
+        mc = row["market_code"]
+        year = row["computed_for_year"]
+
+        # ── Static lookups ────────────────────────────────────────────────────
+        dist_km = DISTANCE_FROM_KABUL_KM.get(mc)
+        fta = FTA_STATUS.get(mc)
+        lang = LANGUAGE_SIMILARITY.get(mc, LANGUAGE_SIMILARITY_DEFAULT)
+
+        row["distance_km"] = dist_km
+        row["has_fta"] = fta is not None
+        row["language_similarity"] = lang
+
+        # ── World Bank context (latest available year ≤ computed year) ────────
+        ctx_by_year = market_context.get(mc, {})
+        ctx = _latest_wb_context(ctx_by_year, year)
+        row["gdp_per_capita_usd"] = ctx.get("gdp_per_capita_usd")
+        row["lpi_score"] = ctx.get("lpi_score")
+        row["regulatory_quality"] = ctx.get("regulatory_quality")
+        row["political_stability"] = ctx.get("political_stability")
+
+        # ── Dimension scores (0–100) ─────────────────────────────────────────
+        s_size = _score_market_size(row.get("global_market_size_usd"), log_max)
+        s_growth = _score_growth(row.get("cagr_pct"))
+        s_quality = _score_market_quality(ctx)
+        s_price = _score_price(row.get("price_competitiveness"))
+        s_foothold = _score_foothold(row.get("afg_export_value_usd"))
+        s_distance = _score_distance(dist_km)
+        s_language = lang * 100
+        s_fta = 100.0 if fta else 0.0
+
+        row["score_market_size"] = round(s_size, 2)
+        row["score_market_growth"] = round(s_growth, 2)
+        row["score_market_quality"] = round(s_quality, 2)
+        row["score_price_competitiveness"] = round(s_price, 2)
+        row["score_afg_foothold"] = round(s_foothold, 2)
+        row["score_distance"] = round(s_distance, 2)
+        row["score_language"] = round(s_language, 2)
+        row["score_fta"] = round(s_fta, 2)
+
+        composite = (
+            s_size * weights["market_size"]
+            + s_growth * weights["market_growth"]
+            + s_quality * weights["market_quality"]
+            + s_price * weights["price_competitiveness"]
+            + s_foothold * weights["afg_foothold"]
+            + s_distance * weights["distance"]
+            + s_language * weights["language"]
+            + s_fta * weights["fta_status"]
+        )
+        row["opportunity_score"] = round(composite, 2)
+
+    return indicator_rows
+
+
+def _latest_wb_context(ctx_by_year: dict[int, dict], up_to_year: int) -> dict:
+    """Return the most recent World Bank context at or before up_to_year."""
+    eligible = {yr: v for yr, v in ctx_by_year.items() if yr <= up_to_year}
+    if not eligible:
+        return {}
+    return eligible[max(eligible)]
+
+
+def _score_market_size(size_usd: float | None, log_max: float) -> float:
+    if size_usd is None or size_usd <= 0:
+        return 0.0
+    return min(100.0, math.log1p(size_usd) / log_max * 100)
+
+
+def _score_growth(cagr_pct: float | None) -> float:
+    """Map CAGR% → 0–100. 0% → 50, +20% → 100, -20% → 0."""
+    if cagr_pct is None:
+        return 50.0  # neutral default
+    return max(0.0, min(100.0, 50.0 + cagr_pct * 2.5))
+
+
+def _score_market_quality(ctx: dict) -> float:
+    """Average of LPI, regulatory quality and political stability sub-scores."""
+    sub: list[float] = []
+
+    lpi = ctx.get("lpi_score")
+    if lpi is not None:
+        sub.append(max(0.0, min(100.0, (lpi - 1) / 4 * 100)))  # 1–5 → 0–100
+
+    for wgi_key in ("regulatory_quality", "political_stability"):
+        val = ctx.get(wgi_key)
+        if val is not None:
+            sub.append(max(0.0, min(100.0, (val + 2.5) / 5.0 * 100)))  # -2.5–2.5 → 0–100
+
+    return float(sum(sub) / len(sub)) if sub else 50.0  # neutral if no data
+
+
+def _score_price(competitiveness: str | None) -> float:
+    mapping = {
+        "Highly Competitive": 100.0,
+        "Competitive": 75.0,
+        "Average": 50.0,
+        "Above Market": 25.0,
+    }
+    return mapping.get(competitiveness or "", 50.0)
+
+
+def _score_foothold(afg_value: float | None) -> float:
+    """Existing Afghan presence signals market acceptance."""
+    if afg_value is None or afg_value <= 0:
+        return 25.0  # untapped — still plausible, but penalised
+    # Log-scale: $10k → ~25, $1M → ~60, $10M → ~75, $100M → ~90
+    return min(100.0, math.log10(afg_value + 1) * 14)
+
+
+def _score_distance(dist_km: int | None) -> float:
+    """Closer is better. 0 km → 100, 15 000 km → 0."""
+    if dist_km is None:
+        return 50.0  # neutral default
+    return max(0.0, 100.0 - dist_km / 150)

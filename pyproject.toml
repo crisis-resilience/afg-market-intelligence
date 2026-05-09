@@ -1,10 +1,12 @@
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# Legacy files being retired; exclude from lint to avoid noise
+exclude = ["comtrade_client.py", "indicators.py", "main.py", "create_standalone_dashboard.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
-ignore = ["E501"]
+ignore = ["E501", "E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]

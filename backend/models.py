@@ -1,8 +1,6 @@
 """SQLAlchemy ORM models — mirror the Alembic migration schema."""
 
-from sqlalchemy import (
-    ARRAY, Column, ForeignKey, Integer, Numeric, Text, TIMESTAMP
-)
+from sqlalchemy import ARRAY, TIMESTAMP, Boolean, Column, ForeignKey, Integer, Numeric, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
@@ -33,6 +31,21 @@ class Market(Base):
     country_code = Column(Text, nullable=False, unique=True)
     country_name = Column(Text)
     region = Column(Text)
+
+
+class MarketContext(Base):
+    """World Bank development indicators per country per year."""
+    __tablename__ = "market_context"
+
+    id = Column(Integer, primary_key=True)
+    country_code = Column(Text, nullable=False)
+    year = Column(Integer, nullable=False)
+    gdp_usd = Column(Numeric(20, 2))
+    gdp_per_capita_usd = Column(Numeric(20, 2))
+    lpi_score = Column(Numeric(5, 3))
+    regulatory_quality = Column(Numeric(6, 4))
+    political_stability = Column(Numeric(6, 4))
+    fetched_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
 
 class TradeFlow(Base):
@@ -74,6 +87,8 @@ class Indicator(Base):
     product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     market_code = Column(Text, nullable=False)
     computed_for_year = Column(Integer, nullable=False)
+
+    # Trade indicators
     global_market_size_usd = Column(Numeric(20, 2))
     afg_export_value_usd = Column(Numeric(20, 2))
     yoy_growth_pct = Column(Numeric(10, 4))
@@ -88,6 +103,31 @@ class Indicator(Base):
     market_avg_price_usd = Column(Numeric(20, 6))
     price_vs_market_pct = Column(Numeric(10, 4))
     price_competitiveness = Column(Text)
+
+    # Opportunity score (composite 0–100)
+    opportunity_score = Column(Numeric(5, 2))
+
+    # Static context
+    distance_km = Column(Integer)
+    has_fta = Column(Boolean)
+    language_similarity = Column(Numeric(4, 3))
+
+    # World Bank context (denormalised for query efficiency)
+    gdp_per_capita_usd = Column(Numeric(20, 2))
+    lpi_score = Column(Numeric(5, 3))
+    regulatory_quality = Column(Numeric(6, 4))
+    political_stability = Column(Numeric(6, 4))
+
+    # Sub-scores (0–100 each)
+    score_market_size = Column(Numeric(5, 2))
+    score_market_growth = Column(Numeric(5, 2))
+    score_market_quality = Column(Numeric(5, 2))
+    score_price_competitiveness = Column(Numeric(5, 2))
+    score_afg_foothold = Column(Numeric(5, 2))
+    score_distance = Column(Numeric(5, 2))
+    score_language = Column(Numeric(5, 2))
+    score_fta = Column(Numeric(5, 2))
+
     computed_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     product = relationship("Product", back_populates="indicators")

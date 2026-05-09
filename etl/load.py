@@ -6,8 +6,6 @@ overwrites existing rows rather than creating duplicates.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
@@ -104,9 +102,41 @@ def bulk_upsert_competitor_flows(engine: Engine, rows: list[dict]) -> int:
     return len(rows)
 
 
+def bulk_upsert_market_context(engine: Engine, rows: list[dict]) -> int:
+    """
+    Upsert World Bank market context rows.
+    Conflict key: (country_code, year).
+    """
+    if not rows:
+        return 0
+    sql = text("""
+        INSERT INTO market_context (
+            country_code, year,
+            gdp_usd, gdp_per_capita_usd, lpi_score,
+            regulatory_quality, political_stability,
+            fetched_at
+        ) VALUES (
+            :country_code, :year,
+            :gdp_usd, :gdp_per_capita_usd, :lpi_score,
+            :regulatory_quality, :political_stability,
+            NOW()
+        )
+        ON CONFLICT (country_code, year) DO UPDATE SET
+            gdp_usd              = EXCLUDED.gdp_usd,
+            gdp_per_capita_usd   = EXCLUDED.gdp_per_capita_usd,
+            lpi_score            = EXCLUDED.lpi_score,
+            regulatory_quality   = EXCLUDED.regulatory_quality,
+            political_stability  = EXCLUDED.political_stability,
+            fetched_at           = NOW()
+    """)
+    with engine.begin() as conn:
+        conn.execute(sql, rows)
+    return len(rows)
+
+
 def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
     """
-    Upsert pre-computed indicator rows.
+    Upsert pre-computed indicator rows (including opportunity scores).
     Conflict key: (product_id, market_code, computed_for_year).
     """
     if not rows:
@@ -120,6 +150,11 @@ def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
             market_share_pct, afg_supplier_rank,
             unit_price_usd, market_avg_price_usd,
             price_vs_market_pct, price_competitiveness,
+            opportunity_score, distance_km, has_fta, language_similarity,
+            gdp_per_capita_usd, lpi_score, regulatory_quality, political_stability,
+            score_market_size, score_market_growth, score_market_quality,
+            score_price_competitiveness, score_afg_foothold,
+            score_distance, score_language, score_fta,
             computed_at
         ) VALUES (
             :product_id, :market_code, :computed_for_year,
@@ -129,24 +164,45 @@ def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
             :market_share_pct, :afg_supplier_rank,
             :unit_price_usd, :market_avg_price_usd,
             :price_vs_market_pct, :price_competitiveness,
+            :opportunity_score, :distance_km, :has_fta, :language_similarity,
+            :gdp_per_capita_usd, :lpi_score, :regulatory_quality, :political_stability,
+            :score_market_size, :score_market_growth, :score_market_quality,
+            :score_price_competitiveness, :score_afg_foothold,
+            :score_distance, :score_language, :score_fta,
             NOW()
         )
         ON CONFLICT (product_id, market_code, computed_for_year) DO UPDATE SET
-            global_market_size_usd = EXCLUDED.global_market_size_usd,
-            afg_export_value_usd   = EXCLUDED.afg_export_value_usd,
-            yoy_growth_pct         = EXCLUDED.yoy_growth_pct,
-            cagr_pct               = EXCLUDED.cagr_pct,
-            absolute_growth_usd    = EXCLUDED.absolute_growth_usd,
-            growth_pct             = EXCLUDED.growth_pct,
-            first_year             = EXCLUDED.first_year,
-            last_year              = EXCLUDED.last_year,
-            market_share_pct       = EXCLUDED.market_share_pct,
-            afg_supplier_rank      = EXCLUDED.afg_supplier_rank,
-            unit_price_usd         = EXCLUDED.unit_price_usd,
-            market_avg_price_usd   = EXCLUDED.market_avg_price_usd,
-            price_vs_market_pct    = EXCLUDED.price_vs_market_pct,
-            price_competitiveness  = EXCLUDED.price_competitiveness,
-            computed_at            = NOW()
+            global_market_size_usd      = EXCLUDED.global_market_size_usd,
+            afg_export_value_usd        = EXCLUDED.afg_export_value_usd,
+            yoy_growth_pct              = EXCLUDED.yoy_growth_pct,
+            cagr_pct                    = EXCLUDED.cagr_pct,
+            absolute_growth_usd         = EXCLUDED.absolute_growth_usd,
+            growth_pct                  = EXCLUDED.growth_pct,
+            first_year                  = EXCLUDED.first_year,
+            last_year                   = EXCLUDED.last_year,
+            market_share_pct            = EXCLUDED.market_share_pct,
+            afg_supplier_rank           = EXCLUDED.afg_supplier_rank,
+            unit_price_usd              = EXCLUDED.unit_price_usd,
+            market_avg_price_usd        = EXCLUDED.market_avg_price_usd,
+            price_vs_market_pct         = EXCLUDED.price_vs_market_pct,
+            price_competitiveness       = EXCLUDED.price_competitiveness,
+            opportunity_score           = EXCLUDED.opportunity_score,
+            distance_km                 = EXCLUDED.distance_km,
+            has_fta                     = EXCLUDED.has_fta,
+            language_similarity         = EXCLUDED.language_similarity,
+            gdp_per_capita_usd          = EXCLUDED.gdp_per_capita_usd,
+            lpi_score                   = EXCLUDED.lpi_score,
+            regulatory_quality          = EXCLUDED.regulatory_quality,
+            political_stability         = EXCLUDED.political_stability,
+            score_market_size           = EXCLUDED.score_market_size,
+            score_market_growth         = EXCLUDED.score_market_growth,
+            score_market_quality        = EXCLUDED.score_market_quality,
+            score_price_competitiveness = EXCLUDED.score_price_competitiveness,
+            score_afg_foothold          = EXCLUDED.score_afg_foothold,
+            score_distance              = EXCLUDED.score_distance,
+            score_language              = EXCLUDED.score_language,
+            score_fta                   = EXCLUDED.score_fta,
+            computed_at                 = NOW()
     """)
     with engine.begin() as conn:
         conn.execute(sql, rows)

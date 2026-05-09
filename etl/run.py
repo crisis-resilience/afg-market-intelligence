@@ -12,6 +12,7 @@ import logging
 import os
 import sys
 
+import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 
@@ -41,11 +42,19 @@ def _engine():
     return create_engine(url, pool_pre_ping=True)
 
 
-def _top_market_codes(mirror_df, global_df, top_n: int) -> list[str]:
-    """Return codes for the top N markets by latest-year import value."""
-    if mirror_df.empty or global_df.empty:
+def _all_market_codes(global_df: pd.DataFrame) -> list[str]:
+    """Return all unique reporter codes appearing in global import data."""
+    if global_df.empty or "reporterCode" not in global_df.columns:
         return []
-    import pandas as pd
+    codes = global_df["reporterCode"].dropna().unique().tolist()
+    # Exclude aggregates (code '0' = World) and Afghanistan itself
+    return [str(c) for c in codes if str(c) not in ("0", "4")]
+
+
+def _top_market_codes(mirror_df: pd.DataFrame, global_df: pd.DataFrame, top_n: int) -> list[str]:
+    """Return codes for the top N markets by latest-year total import value."""
+    if global_df.empty:
+        return []
     latest_year = max(YEARS)
     world_totals = global_df[
         (global_df["partnerCode"] == "0") & (global_df["year"] == latest_year)
@@ -60,7 +69,26 @@ def _top_market_codes(mirror_df, global_df, top_n: int) -> list[str]:
     return [str(c) for c in top]
 
 
-def run_product(engine, product_name: str, cfg: dict, dry_run: bool) -> dict:
+def _market_sizes_by_code(global_df: pd.DataFrame, year: int) -> dict[str, float]:
+    """Return {market_code: total_import_usd} for partnerCode==0 at the given year."""
+    if global_df.empty:
+        return {}
+    sub = global_df[(global_df["partnerCode"] == "0") & (global_df["year"] == year)].copy()
+    sub["primaryValue"] = pd.to_numeric(sub["primaryValue"], errors="coerce")
+    return dict(
+        sub.groupby("reporterCode")["primaryValue"]
+        .sum()
+        .items()
+    )
+
+
+def run_product(
+    engine,
+    product_name: str,
+    cfg: dict,
+    dry_run: bool,
+    market_context: dict[str, dict],  # {country_code: {year: {field: value}}}
+) -> dict:
     hs_codes = cfg["codes"]
     logger.info(f"▶  {product_name}  ({', '.join(hs_codes)})")
     errors = []
@@ -77,7 +105,6 @@ def run_product(engine, product_name: str, cfg: dict, dry_run: bool) -> dict:
         )
 
     # 2. Fetch mirror exports (Afghanistan's side)
-    import pandas as pd
     mirror_frames = []
     for hs in hs_codes:
         try:
@@ -107,16 +134,17 @@ def run_product(engine, product_name: str, cfg: dict, dry_run: bool) -> dict:
         logger.warning(f"  No data fetched for {product_name} — skipping")
         return {"product": product_name, "status": "no_data", "errors": errors}
 
-    # 4. Determine top markets
-    market_codes = _top_market_codes(mirror_df, global_df, TOP_N_MARKETS)
-    logger.info(f"  Top markets: {market_codes}")
+    # 4. Determine markets: ALL markets for scoring, top N for competitor flows
+    all_codes = _all_market_codes(global_df)
+    top_codes = _top_market_codes(mirror_df, global_df, TOP_N_MARKETS)
+    logger.info(f"  Markets for scoring: {len(all_codes)}, top {TOP_N_MARKETS} for detail: {top_codes}")
 
     if dry_run:
         logger.info(f"  [dry-run] Skipping DB writes for {product_name}")
         return {"product": product_name, "status": "dry_run", "errors": errors}
 
-    # 5. Upsert market rows
-    for code in market_codes:
+    # 5. Upsert market rows (top markets only — others populated on demand)
+    for code in top_codes:
         name = _resolve_market_name(global_df, code)
         load.upsert_market(engine, code, name)
 
@@ -125,20 +153,26 @@ def run_product(engine, product_name: str, cfg: dict, dry_run: bool) -> dict:
     n_flows = load.bulk_upsert_trade_flows(engine, flow_rows)
     logger.info(f"  Upserted {n_flows} trade_flow rows")
 
-    # 7. Transform + load competitor flows
-    comp_rows = transform.to_competitor_flows(global_df, product_id, market_codes)
+    # 7. Transform + load competitor flows (top markets only)
+    comp_rows = transform.to_competitor_flows(global_df, product_id, top_codes)
     n_comp = load.bulk_upsert_competitor_flows(engine, comp_rows)
     logger.info(f"  Upserted {n_comp} competitor_flow rows")
 
-    # 8. Compute + load indicators
-    ind_rows = transform.compute_indicators(product_id, market_codes, mirror_df, global_df, YEARS)
+    # 8. Compute indicators for ALL markets
+    latest_year = max(YEARS)
+    all_market_sizes = _market_sizes_by_code(global_df, latest_year)
+    ind_rows = transform.compute_indicators(product_id, all_codes, mirror_df, global_df, YEARS)
+
+    # 9. Enrich with opportunity scores
+    ind_rows = transform.enrich_indicators_with_scores(ind_rows, market_context, all_market_sizes)
+
     n_ind = load.bulk_upsert_indicators(engine, ind_rows)
-    logger.info(f"  Upserted {n_ind} indicator rows")
+    logger.info(f"  Upserted {n_ind} indicator rows (all markets, with scores)")
 
     return {"product": product_name, "status": "success", "errors": errors}
 
 
-def _resolve_market_name(global_df, code: str) -> str | None:
+def _resolve_market_name(global_df: pd.DataFrame, code: str) -> str | None:
     if "reporterDesc" in global_df.columns:
         match = global_df[global_df["reporterCode"] == code]["reporterDesc"]
         if not match.empty:
@@ -148,6 +182,20 @@ def _resolve_market_name(global_df, code: str) -> str | None:
         if not match.empty:
             return str(match.iloc[0])
     return None
+
+
+def _build_market_context(wb_rows: list[dict]) -> dict[str, dict[int, dict]]:
+    """Restructure flat WB rows into {country_code: {year: {field: value}}}."""
+    ctx: dict[str, dict[int, dict]] = {}
+    for row in wb_rows:
+        cc = row["country_code"]
+        yr = row["year"]
+        ctx.setdefault(cc, {})[yr] = {
+            k: row[k]
+            for k in ("gdp_usd", "gdp_per_capita_usd", "lpi_score",
+                      "regulatory_quality", "political_stability")
+        }
+    return ctx
 
 
 def main():
@@ -160,6 +208,10 @@ def main():
         "--dry-run", action="store_true",
         help="Fetch and transform but do not write to DB",
     )
+    parser.add_argument(
+        "--skip-world-bank", action="store_true",
+        help="Skip World Bank indicator fetch (use existing market_context rows)",
+    )
     args = parser.parse_args()
 
     target = args.products or list(PRODUCTS.keys())
@@ -170,10 +222,35 @@ def main():
 
     engine = None if args.dry_run else _engine()
 
+    # ── Phase A: World Bank fetch (once per run, across all markets) ──────────
+    market_context: dict[str, dict[int, dict]] = {}
+
+    if not args.skip_world_bank and not args.dry_run:
+        # Collect all ISO-3 country codes from Comtrade reporter descriptions.
+        # We use a broad set of major trading nations as a pragmatic approach;
+        # the ETL will extend this as new market codes appear in trade data.
+        from config import DISTANCE_FROM_KABUL_KM
+        # Map Comtrade numeric codes to ISO-3 alpha for WB API
+        # (WB accepts ISO-3 alpha; Comtrade uses M49 numeric)
+        _numeric_to_iso3 = _load_numeric_to_iso3()
+        all_numeric_codes = list(DISTANCE_FROM_KABUL_KM.keys())
+        iso3_codes = [_numeric_to_iso3[c] for c in all_numeric_codes if c in _numeric_to_iso3]
+
+        logger.info(f"Fetching World Bank indicators for {len(iso3_codes)} countries…")
+        try:
+            wb_rows = fetch.fetch_world_bank_indicators(iso3_codes, YEARS)
+            market_context = _build_market_context(wb_rows)
+            n_ctx = load.bulk_upsert_market_context(engine, wb_rows)
+            logger.info(f"Upserted {n_ctx} market_context rows")
+        except Exception as exc:
+            logger.error(f"World Bank fetch failed: {exc} — continuing without WB data")
+
+    # ── Phase B: Per-product ETL ──────────────────────────────────────────────
     results = []
     all_errors = []
     for name in target:
-        result = run_product(engine, name, PRODUCTS[name], dry_run=args.dry_run)
+        result = run_product(engine, name, PRODUCTS[name], dry_run=args.dry_run,
+                             market_context=market_context)
         results.append(result)
         all_errors.extend(result.get("errors", []))
 
@@ -186,6 +263,27 @@ def main():
     if engine and not args.dry_run:
         status = "success" if not all_errors else "partial"
         load.log_pipeline_run(engine, status, successes, all_errors)
+
+
+def _load_numeric_to_iso3() -> dict[str, str]:
+    """Mapping from M49 numeric codes to ISO-3 alpha codes for World Bank API."""
+    return {
+        "586": "PAK", "356": "IND", "364": "IRN", "860": "UZB", "762": "TJK",
+        "795": "TKM", "398": "KAZ", "417": "KGZ", "156": "CHN", "784": "ARE",
+        "682": "SAU", "792": "TUR", "634": "QAT", "414": "KWT", "512": "OMN",
+        "048": "BHR", "400": "JOR", "368": "IRQ", "818": "EGY", "276": "DEU",
+        "826": "GBR", "528": "NLD", "250": "FRA", "380": "ITA", "56": "BEL",
+        "724": "ESP", "756": "CHE", "040": "AUT", "616": "POL", "203": "CZE",
+        "752": "SWE", "246": "FIN", "578": "NOR", "208": "DNK", "372": "IRL",
+        "300": "GRC", "642": "ROU", "100": "BGR", "348": "HUN", "703": "SVK",
+        "840": "USA", "124": "CAN", "484": "MEX", "076": "BRA", "032": "ARG",
+        "392": "JPN", "410": "KOR", "702": "SGP", "458": "MYS", "360": "IDN",
+        "764": "THA", "704": "VNM", "050": "BGD", "144": "LKA", "524": "NPL",
+        "104": "MMR", "608": "PHL", "036": "AUS", "554": "NZL", "710": "ZAF",
+        "566": "NGA", "012": "DZA", "504": "MAR", "231": "ETH", "643": "RUS",
+        "804": "UKR", "112": "BLR", "031": "AZE", "268": "GEO", "051": "ARM",
+        "064": "BTN", "462": "MDV",
+    }
 
 
 if __name__ == "__main__":

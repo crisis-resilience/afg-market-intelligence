@@ -7,13 +7,12 @@ Uses httpx TestClient with the FastAPI app and an in-memory SQLite DB
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.database import get_db
 from backend.main import app
-from backend.models import Base
 
 # ── Test DB setup (SQLite in-memory) ─────────────────────────────────────────
 
@@ -25,8 +24,7 @@ test_engine = create_engine(
     poolclass=StaticPool,
 )
 
-# SQLite doesn't support ARRAY; we patch the migration by creating tables directly
-# from the ORM models, skipping PostgreSQL-specific column types.
+
 @event.listens_for(test_engine, "connect")
 def _set_sqlite_pragma(dbapi_conn, _):
     dbapi_conn.execute("PRAGMA foreign_keys=ON")
@@ -48,9 +46,9 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture(scope="session", autouse=True)
 def create_tables():
-    # Create tables using raw SQL to avoid ARRAY/JSONB types not in SQLite
+    # Raw SQL avoids ARRAY/JSONB/BOOLEAN types not supported in SQLite
     with test_engine.begin() as conn:
-        conn.execute(__import__("sqlalchemy").text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS products (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
@@ -59,7 +57,7 @@ def create_tables():
                 description TEXT
             )
         """))
-        conn.execute(__import__("sqlalchemy").text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS markets (
                 id INTEGER PRIMARY KEY,
                 country_code TEXT NOT NULL UNIQUE,
@@ -67,7 +65,21 @@ def create_tables():
                 region TEXT
             )
         """))
-        conn.execute(__import__("sqlalchemy").text("""
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS market_context (
+                id INTEGER PRIMARY KEY,
+                country_code TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                gdp_usd REAL,
+                gdp_per_capita_usd REAL,
+                lpi_score REAL,
+                regulatory_quality REAL,
+                political_stability REAL,
+                fetched_at TEXT,
+                UNIQUE(country_code, year)
+            )
+        """))
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS trade_flows (
                 id INTEGER PRIMARY KEY,
                 product_id INTEGER NOT NULL,
@@ -82,7 +94,7 @@ def create_tables():
                 UNIQUE(product_id, importer_code, year)
             )
         """))
-        conn.execute(__import__("sqlalchemy").text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS competitor_flows (
                 id INTEGER PRIMARY KEY,
                 product_id INTEGER NOT NULL,
@@ -95,7 +107,7 @@ def create_tables():
                 UNIQUE(product_id, market_code, supplier_code, year)
             )
         """))
-        conn.execute(__import__("sqlalchemy").text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS indicators (
                 id INTEGER PRIMARY KEY,
                 product_id INTEGER NOT NULL,
@@ -115,11 +127,27 @@ def create_tables():
                 market_avg_price_usd REAL,
                 price_vs_market_pct REAL,
                 price_competitiveness TEXT,
+                opportunity_score REAL,
+                distance_km INTEGER,
+                has_fta INTEGER,
+                language_similarity REAL,
+                gdp_per_capita_usd REAL,
+                lpi_score REAL,
+                regulatory_quality REAL,
+                political_stability REAL,
+                score_market_size REAL,
+                score_market_growth REAL,
+                score_market_quality REAL,
+                score_price_competitiveness REAL,
+                score_afg_foothold REAL,
+                score_distance REAL,
+                score_language REAL,
+                score_fta REAL,
                 computed_at TEXT,
                 UNIQUE(product_id, market_code, computed_for_year)
             )
         """))
-        conn.execute(__import__("sqlalchemy").text("""
+        conn.execute(text("""
             CREATE TABLE IF NOT EXISTS pipeline_runs (
                 id INTEGER PRIMARY KEY,
                 run_at TEXT,
@@ -140,7 +168,6 @@ def client():
 def seeded_db():
     """Insert minimal fixtures for tests that need data."""
     with TestingSession() as db:
-        from sqlalchemy import text
         db.execute(text(
             "INSERT OR IGNORE INTO products (name, category, hs_codes, description) "
             "VALUES ('Saffron', 'Spices & Herbs', '091020', 'Saffron stigmas')"
@@ -150,15 +177,64 @@ def seeded_db():
             "VALUES ('699', 'India')"
         ))
         db.execute(text(
-            "INSERT OR IGNORE INTO indicators "
-            "(product_id, market_code, computed_for_year, afg_export_value_usd, "
-            " global_market_size_usd, market_share_pct, afg_supplier_rank, "
-            " yoy_growth_pct, cagr_pct, absolute_growth_usd, growth_pct, "
-            " first_year, last_year, price_competitiveness) "
-            "SELECT p.id, '699', 2024, 1500000, 50000000, 3.0, 2, "
-            "       10.5, 8.2, 200000, 15.4, 2021, 2024, 'Competitive' "
-            "FROM products p WHERE p.name = 'Saffron'"
+            "INSERT OR IGNORE INTO markets (country_code, country_name) "
+            "VALUES ('276', 'Germany')"
         ))
+        db.execute(text("""
+            INSERT OR IGNORE INTO indicators (
+                product_id, market_code, computed_for_year,
+                afg_export_value_usd, global_market_size_usd,
+                market_share_pct, afg_supplier_rank,
+                yoy_growth_pct, cagr_pct, absolute_growth_usd, growth_pct,
+                first_year, last_year, price_competitiveness,
+                opportunity_score, distance_km, has_fta, language_similarity,
+                gdp_per_capita_usd, lpi_score, regulatory_quality, political_stability,
+                score_market_size, score_market_growth, score_market_quality,
+                score_price_competitiveness, score_afg_foothold,
+                score_distance, score_language, score_fta
+            )
+            SELECT
+                p.id, '699', 2024,
+                1500000, 50000000,
+                3.0, 2,
+                10.5, 8.2, 200000, 15.4,
+                2021, 2024, 'Competitive',
+                72.5, 1000, 0, 0.2,
+                2200, 3.5, 0.8, 0.5,
+                65.0, 60.0, 70.0, 75.0, 45.0, 93.0, 20.0, 0.0
+            FROM products p WHERE p.name = 'Saffron'
+        """))
+        db.execute(text("""
+            INSERT OR IGNORE INTO indicators (
+                product_id, market_code, computed_for_year,
+                afg_export_value_usd, global_market_size_usd,
+                market_share_pct, afg_supplier_rank,
+                yoy_growth_pct, cagr_pct, absolute_growth_usd, growth_pct,
+                first_year, last_year, price_competitiveness,
+                opportunity_score, distance_km, has_fta, language_similarity,
+                gdp_per_capita_usd, lpi_score, regulatory_quality, political_stability,
+                score_market_size, score_market_growth, score_market_quality,
+                score_price_competitiveness, score_afg_foothold,
+                score_distance, score_language, score_fta
+            )
+            SELECT
+                p.id, '276', 2024,
+                800000, 80000000,
+                1.0, 5,
+                5.0, 4.2, 80000, 10.4,
+                2021, 2024, 'Average',
+                68.0, 5500, 1, 0.05,
+                48000, 4.1, 1.5, 0.9,
+                70.0, 55.0, 88.0, 50.0, 38.0, 33.0, 5.0, 100.0
+            FROM products p WHERE p.name = 'Saffron'
+        """))
+        db.execute(text("""
+            INSERT OR IGNORE INTO competitor_flows
+                (product_id, market_code, year, supplier_code, supplier_name,
+                 trade_value_usd, trade_quantity)
+            SELECT p.id, '699', 2024, '356', 'Iran', 12000000, 5000
+            FROM products p WHERE p.name = 'Saffron'
+        """))
         db.commit()
 
 
@@ -220,7 +296,6 @@ class TestProductDetail:
 class TestMarketDetail:
     def test_unknown_returns_404(self, client):
         r = client.get("/api/products/091020/markets/ZZZZ")
-        # Either 404 (product not found) or empty response — both are valid
         assert r.status_code in (200, 404)
 
     def test_known_market_returns_detail(self, client, seeded_db):
@@ -244,3 +319,95 @@ class TestPipelineRuns:
         r = client.get("/api/pipeline-runs")
         assert r.status_code == 200
         assert isinstance(r.json(), list)
+
+
+class TestDiscovery:
+    def test_unknown_hs_code_returns_404(self, client):
+        r = client.get("/api/discover/999999")
+        assert r.status_code == 404
+
+    def test_ranked_markets_schema(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["hs_code"] == "091020"
+        assert "product_name" in body
+        assert "computed_for_year" in body
+        assert "total_markets_scored" in body
+        assert isinstance(body["markets"], list)
+
+    def test_ranked_markets_are_ordered(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        assert r.status_code == 200
+        markets = r.json()["markets"]
+        assert len(markets) >= 2
+        scores = [m["opportunity_score"] for m in markets if m["opportunity_score"] is not None]
+        assert scores == sorted(scores, reverse=True)
+
+    def test_ranked_markets_include_rank(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        markets = r.json()["markets"]
+        for i, m in enumerate(markets, start=1):
+            assert m["rank"] == i
+
+    def test_market_row_has_score_breakdown(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        assert r.status_code == 200
+        markets = r.json()["markets"]
+        assert len(markets) > 0
+        m = markets[0]
+        assert "score_breakdown" in m
+        bd = m["score_breakdown"]
+        for key in ("market_size", "market_growth", "market_quality",
+                    "price_competitiveness", "afg_foothold",
+                    "distance", "language", "fta_status"):
+            assert key in bd
+
+    def test_market_row_has_context(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        markets = r.json()["markets"]
+        assert len(markets) > 0
+        ctx = markets[0]["context"]
+        for key in ("gdp_per_capita_usd", "lpi_score",
+                    "regulatory_quality", "political_stability"):
+            assert key in ctx
+
+    def test_limit_param(self, client, seeded_db):
+        r = client.get("/api/discover/091020?limit=1")
+        assert r.status_code == 200
+        assert len(r.json()["markets"]) <= 1
+
+    def test_min_score_filter(self, client, seeded_db):
+        r = client.get("/api/discover/091020?min_score=100")
+        assert r.status_code == 200
+        markets = r.json()["markets"]
+        for m in markets:
+            if m["opportunity_score"] is not None:
+                assert m["opportunity_score"] >= 100
+
+    def test_market_profile_schema(self, client, seeded_db):
+        r = client.get("/api/discover/091020/markets/699")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["hs_code"] == "091020"
+        assert body["market_code"] == "699"
+        assert "opportunity_score" in body
+        assert "score_breakdown" in body
+        assert "context" in body
+        assert "trade" in body
+        assert "competitors" in body
+        assert "next_steps" in body
+
+    def test_market_profile_next_steps_non_empty(self, client, seeded_db):
+        r = client.get("/api/discover/091020/markets/699")
+        assert r.status_code == 200
+        steps = r.json()["next_steps"]
+        assert len(steps) > 0
+        step = steps[0]
+        assert "order" in step
+        assert "title" in step
+        assert "description" in step
+
+    def test_market_profile_404_on_unknown(self, client):
+        r = client.get("/api/discover/091020/markets/ZZZZ")
+        assert r.status_code == 404

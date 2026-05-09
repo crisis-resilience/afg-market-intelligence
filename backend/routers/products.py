@@ -1,8 +1,5 @@
 """Product-related API routes."""
 
-import json
-import os
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session

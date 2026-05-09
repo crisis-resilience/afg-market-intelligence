@@ -1,14 +1,22 @@
 """Service layer — queries the DB and assembles API response objects."""
 
-import json
-import os
-from typing import Optional
 
-from sqlalchemy import func, text
+from sqlalchemy import String, cast, func
 from sqlalchemy.orm import Session
 
 from backend import schemas
 from backend.models import CompetitorFlow, Indicator, Market, PipelineRun, Product, TradeFlow
+
+
+def _find_product_by_hs(db: Session, hs_code: str) -> Product | None:
+    """Locate a product by HS code, compatible with PostgreSQL ARRAY and SQLite TEXT."""
+    clean = hs_code.replace(".", "").strip()
+    # cast(ARRAY, String) → '{code1,code2}' in PG, plain text in SQLite — LIKE works on both
+    return (
+        db.query(Product)
+        .filter(cast(Product.hs_codes, String).contains(clean))
+        .first()
+    )
 
 
 def list_products(db: Session) -> list[schemas.ProductSummary]:
@@ -67,10 +75,10 @@ def list_products(db: Session) -> list[schemas.ProductSummary]:
     return results
 
 
-def get_product(db: Session, hs_code: str) -> Optional[schemas.ProductDetail]:
+def get_product(db: Session, hs_code: str) -> schemas.ProductDetail | None:
     product = (
         db.query(Product)
-        .filter(Product.hs_codes.any(hs_code))
+        .filter(cast(Product.hs_codes, String).contains(hs_code.replace(".", "").strip()))
         .first()
     )
     if not product:
@@ -111,10 +119,10 @@ def get_markets(db: Session, hs_code: str) -> list[schemas.MarketIndicator]:
     return detail.markets if detail else []
 
 
-def get_market_detail(db: Session, hs_code: str, market_code: str) -> Optional[schemas.MarketDetail]:
+def get_market_detail(db: Session, hs_code: str, market_code: str) -> schemas.MarketDetail | None:
     product = (
         db.query(Product)
-        .filter(Product.hs_codes.any(hs_code))
+        .filter(cast(Product.hs_codes, String).contains(hs_code.replace(".", "").strip()))
         .first()
     )
     if not product:
@@ -214,7 +222,7 @@ def get_pipeline_runs(db: Session, limit: int = 10) -> list[schemas.PipelineRunS
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _indicator_to_schema(ind: Indicator, market: Optional[Market]) -> schemas.MarketIndicator:
+def _indicator_to_schema(ind: Indicator, market: Market | None) -> schemas.MarketIndicator:
     return schemas.MarketIndicator(
         market_code=ind.market_code,
         market_name=market.country_name if market else ind.market_code,
@@ -239,7 +247,7 @@ def _indicator_to_schema(ind: Indicator, market: Optional[Market]) -> schemas.Ma
     )
 
 
-def _f(v) -> Optional[float]:
+def _f(v) -> float | None:
     try:
         return float(v) if v is not None else None
     except (TypeError, ValueError):

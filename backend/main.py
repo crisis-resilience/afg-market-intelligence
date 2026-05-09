@@ -3,12 +3,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routers import meta, products
+from backend.routers import discovery, meta, products
 
 app = FastAPI(
     title="AFG Market Intelligence API",
-    description="Afghanistan export trade intelligence for UNDP policy analysts",
-    version="1.0.0",
+    description="Afghanistan market opportunity discovery tool for Afghan exporters",
+    version="2.0.0",
 )
 
 app.add_middleware(
@@ -20,3 +20,4 @@ app.add_middleware(
 
 app.include_router(products.router)
 app.include_router(meta.router)
+app.include_router(discovery.router)

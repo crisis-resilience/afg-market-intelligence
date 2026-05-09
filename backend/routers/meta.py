@@ -1,7 +1,6 @@
 """Metadata and system routes."""
 
 import json
-import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -23,9 +22,24 @@ def get_indicator_definitions():
         return []
     with open(_DEFINITIONS_PATH) as f:
         raw = json.load(f)
-    # Normalise — the existing file uses a dict or list format
+    # File has a top-level "indicators" key; fall back to treating the whole
+    # dict as a flat map if that key is absent (forward-compat).
+    if isinstance(raw, dict) and "indicators" in raw:
+        raw = raw["indicators"]
     if isinstance(raw, dict):
-        return [schemas.IndicatorDefinition(key=k, **v) for k, v in raw.items()]
+        result = []
+        for k, v in raw.items():
+            if not isinstance(v, dict):
+                continue
+            label = v.get("name") or v.get("label") or k
+            result.append(schemas.IndicatorDefinition(
+                key=k,
+                label=label,
+                description=v.get("description", ""),
+                unit=v.get("unit"),
+                tooltip=v.get("importance") or v.get("tooltip"),
+            ))
+        return result
     return [schemas.IndicatorDefinition(**item) for item in raw]
 
 
