@@ -3,20 +3,26 @@ Main analysis pipeline for Afghanistan Trade Intelligence Tool.
 Orchestrates data fetching, indicator calculations, and output generation.
 """
 
-import pandas as pd
-import json
-import os
-import logging
 import argparse
+import json
+import logging
+import os
 from datetime import datetime
-from typing import Dict, List
+
+import pandas as pd
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
-from config import PRODUCTS, YEARS, TOP_N_MARKETS, AFGHANISTAN_CODE
-from comtrade_client import fetch_afghanistan_exports_batch, fetch_unified_global_imports, fetch_market_imports_batch, fetch_market_imports_by_partner_batch, set_api_key
+from comtrade_client import (
+    fetch_afghanistan_exports_batch,
+    fetch_market_imports_batch,
+    fetch_market_imports_by_partner_batch,
+    fetch_unified_global_imports,
+    set_api_key,
+)
+from config import PRODUCTS, TOP_N_MARKETS, YEARS
 
 # Set up logging
 logging.basicConfig(
@@ -29,30 +35,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-from comtrade_client import (
-    fetch_afghanistan_exports,
-    fetch_afghanistan_exports_batch,
-    fetch_market_imports_batch,
-    fetch_market_imports_by_partner_batch,
-    fetch_global_exports,
-    set_api_key,
-    get_country_name
-)
+from comtrade_client import get_country_name
 from indicators import (
-    identify_top_markets,
-    identify_top_global_import_markets,
     calculate_growth_rate,
     calculate_market_share,
-    get_market_rank,
-    get_competitor_shares,
     calculate_unit_price,
-    compare_to_global_average,
     compare_to_competitors,
-    compare_to_competitors_in_market
+    compare_to_competitors_in_market,
+    get_competitor_shares,
+    get_market_rank,
+    identify_top_global_import_markets,
 )
 
 
-def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
+def analyze_product(product_name: str, hs_codes: list[str]) -> dict:
     """
     Analyze a single product across all its HS codes.
     
@@ -74,7 +70,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
     print(f"{'='*60}")
     
     # Fetch Afghanistan exports for all HS codes in batch
-    print(f"\n  Fetching Afghanistan export data for all HS codes...")
+    print("\n  Fetching Afghanistan export data for all HS codes...")
     all_exports = fetch_afghanistan_exports_batch(hs_codes, YEARS)
 
     # Save raw Afghanistan export data to CSV
@@ -94,7 +90,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
         }
 
     print(f"  ✅ Successfully fetched {len(all_exports)} raw export records")
-    print(f"  📊 Raw data sample:")
+    print("  📊 Raw data sample:")
     print(f"     {all_exports.head(2).to_string() if len(all_exports) > 0 else 'No data'}")
 
     # Use the batch result directly
@@ -110,18 +106,18 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
     latest_year = max(YEARS)  # 2024
     df_exports_latest = df_exports[df_exports['year'] == latest_year].copy()
 
-    print(f"\n  📈 After aggregation:")
+    print("\n  📈 After aggregation:")
     print(f"  ✓ Total records: {len(df_exports)} (across all years)")
     print(f"  ✓ Latest year ({latest_year}) records: {len(df_exports_latest)}")
     print(f"  ✓ Total export value (all years): ${df_exports['trade_value'].sum():,.0f}")
     print(f"  ✓ Latest year export value: ${df_exports_latest['trade_value'].sum():,.0f}")
-    print(f"  📊 Top export destinations (latest year):")
+    print("  📊 Top export destinations (latest year):")
     top_exports_latest = df_exports_latest.groupby('partner')['trade_value'].sum().sort_values(ascending=False).head(5)
     for country_code, value in top_exports_latest.items():
         print(f"     • {get_country_name(country_code)}: ${value:,.0f}")
     
     # SINGLE UNIFIED API CALL: Fetch ALL global import data once
-    print(f"\n  🚀 Fetching unified global import data...")
+    print("\n  🚀 Fetching unified global import data...")
     unified_global_data = fetch_unified_global_imports(hs_codes[0], YEARS)
     print(f"  ✅ Unified global data fetched: {len(unified_global_data)} records")
 
@@ -135,7 +131,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
     top_markets = identify_top_global_import_markets(hs_codes[0], YEARS, top_n=TOP_N_MARKETS, unified_data=unified_global_data)
 
     if top_markets.empty:
-        print(f"  ⚠ No global import markets found")
+        print("  ⚠ No global import markets found")
         logger.warning(f"No global import markets found for {product_name}")
         return {
             'product': product_name,
@@ -155,7 +151,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
     all_market_codes = top_markets['partner'].tolist()
 
     # EXTRACT data for ALL markets from cached unified data (no additional API calls)
-    print(f"\n  📊 Extracting market data from unified dataset...")
+    print("\n  📊 Extracting market data from unified dataset...")
     batch_market_imports = fetch_market_imports_batch(all_market_codes, hs_codes[0], YEARS, unified_data=unified_global_data)
     batch_supplier_data = fetch_market_imports_by_partner_batch(all_market_codes, hs_codes[0], YEARS, unified_data=unified_global_data)
 
@@ -187,7 +183,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
             market_share = calculate_market_share(df_exports_latest, batch_market_imports, market_code, year=latest_year)
             print(f"      📈 Market share calculation (2024): {market_share:.2%}" if market_share else "      ⚠️ Could not calculate market share")
         else:
-            print(f"      ❌ No market import data available")
+            print("      ❌ No market import data available")
             logger.warning(f"Could not fetch import data for market {market_code}, product {product_name}")
 
         # Get supplier data from batch results
@@ -203,11 +199,11 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
             print(f"      🏆 Afghanistan's rank: #{market_rank}" if market_rank else "      ⚠️ Could not determine rank")
             print(f"      🏅 Top competitors found: {len(competitor_shares)}")
         else:
-            print(f"      ❌ No competitor data available")
+            print("      ❌ No competitor data available")
             logger.warning(f"Could not fetch supplier data for market {market_code}, product {product_name}")
         
         # Calculate price competitiveness
-        print(f"      Calculating price competitiveness...")
+        print("      Calculating price competitiveness...")
         
         # Afghanistan's unit price
         afg_unit_price = calculate_unit_price(df_exports, partner=market_code, year=latest_year)
@@ -223,7 +219,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
                 print(f"      📊 Market average price: ${market_price_comparison['market_avg_price']:.2f}")
                 print(f"      📈 Price competitiveness: {market_price_comparison.get('competitiveness', 'N/A')}")
         else:
-            print(f"      ⚠️ Insufficient data for price comparison")
+            print("      ⚠️ Insufficient data for price comparison")
         
         # Compare to competitors
         competitor_comparison = {}
@@ -278,7 +274,7 @@ def analyze_product(product_name: str, hs_codes: List[str]) -> Dict:
     }
 
 
-def generate_summary_csv(results: List[Dict], output_dir: str = 'output'):
+def generate_summary_csv(results: list[dict], output_dir: str = 'output'):
     """
     Generate a summary CSV file with all indicators.
     
@@ -333,7 +329,7 @@ def generate_summary_csv(results: List[Dict], output_dir: str = 'output'):
         return None
 
 
-def generate_detailed_json(results: List[Dict], output_dir: str = 'output'):
+def generate_detailed_json(results: list[dict], output_dir: str = 'output'):
     """
     Generate a detailed JSON file with full results.
     
@@ -388,8 +384,8 @@ def main(debug: bool = False):
         print("🧪 AFGHANISTAN TRADE INTELLIGENCE TOOL - DEBUG MODE")
         print("="*60)
         print("🎯 DEBUG MODE: Analyzing only Almonds (HS 080211)")
-        print(f"📊 Purpose: Test complete analysis pipeline with single product")
-        print(f"🌐 Data Source: UN Comtrade API")
+        print("📊 Purpose: Test complete analysis pipeline with single product")
+        print("🌐 Data Source: UN Comtrade API")
         print(f"📅 Analysis Period: {min(YEARS)} - {max(YEARS)}")
         print(f"🎯 Top Markets per Product: {TOP_N_MARKETS}")
         print("="*60)
@@ -409,7 +405,7 @@ def main(debug: bool = False):
         print("\n" + "="*60)
         print("AFGHANISTAN TRADE INTELLIGENCE TOOL")
         print("="*60)
-        print(f"Data Source: UN Comtrade API")
+        print("Data Source: UN Comtrade API")
         print(f"Analysis Period: {min(YEARS)} - {max(YEARS)}")
         print(f"Products: {len(PRODUCTS)}")
         print(f"Top Markets per Product: {TOP_N_MARKETS}")
@@ -456,11 +452,11 @@ def main(debug: bool = False):
         product_values = [(r['product'], r.get('total_export_value', 0)) for r in successful_products]
         product_values.sort(key=lambda x: x[1], reverse=True)
 
-        print(f"\n🏆 Top products by export value:")
+        print("\n🏆 Top products by export value:")
         for product, value in product_values[:3]:  # Top 3
             print(f"   • {product}: ${value:,.0f}")
 
-    print(f"\n💾 Outputs saved:")
+    print("\n💾 Outputs saved:")
     print(f"   📄 CSV Summary: {summary_path}")
     print(f"   📄 JSON Details: {detailed_path}")
 

@@ -3,17 +3,15 @@ UN Comtrade API client for fetching granular trade data.
 Handles data retrieval from UN Comtrade API for specific HS codes.
 """
 
-import comtradeapicall
-import pandas as pd
-import time
 import logging
-import requests
-from typing import List, Optional, Dict
-from config import AFGHANISTAN_CODE
 
 # Disable SSL verification for development (workaround for certificate issues)
 # TODO: Remove this in production and ensure proper certificate validation
 import ssl
+import time
+
+import comtradeapicall
+import pandas as pd
 import urllib3
 
 # Create unverified SSL context
@@ -82,8 +80,8 @@ def get_country_name(code: str) -> str:
     return COUNTRY_CODES.get(code_str, code_str)
 
 
-def fetch_afghanistan_exports_batch(hs_codes: List[str], years: List[int],
-                                   partner: Optional[str] = None) -> pd.DataFrame:
+def fetch_afghanistan_exports_batch(hs_codes: list[str], years: list[int],
+                                   partner: str | None = None) -> pd.DataFrame:
     """
     Fetch Afghanistan export data for multiple HS codes in batch.
     
@@ -130,7 +128,7 @@ def fetch_afghanistan_exports_batch(hs_codes: List[str], years: List[int],
     # MIRROR DATA APPROACH:
     # Query: All countries (reporters) importing FROM Afghanistan (partner)
     # This gives us Afghanistan's exports as reported by importing countries
-    logger.info(f"  Using mirror data: querying world imports from Afghanistan")
+    logger.info("  Using mirror data: querying world imports from Afghanistan")
     response = comtradeapicall.getFinalData(
             subscription_key=COMTRADE_API_KEY,
             typeCode='C',
@@ -219,7 +217,7 @@ def fetch_afghanistan_exports_batch(hs_codes: List[str], years: List[int],
             logger.error(traceback.format_exc())
             return pd.DataFrame()
     else:
-        logger.warning(f"API returned invalid or empty response")
+        logger.warning("API returned invalid or empty response")
         return pd.DataFrame()
 
     # For batch processing, return the processed DataFrame directly
@@ -230,8 +228,8 @@ def fetch_afghanistan_exports_batch(hs_codes: List[str], years: List[int],
     return df
 
 
-def fetch_afghanistan_exports(hs_code: str, years: List[int],
-                              partner: Optional[str] = None) -> pd.DataFrame:
+def fetch_afghanistan_exports(hs_code: str, years: list[int],
+                              partner: str | None = None) -> pd.DataFrame:
     """
     Fetch Afghanistan export data for a specific product and years.
     
@@ -480,7 +478,7 @@ def fetch_afghanistan_exports(hs_code: str, years: List[int],
     return result
 
 
-def fetch_unified_global_imports(hs_code: str, years: List[int]) -> pd.DataFrame:
+def fetch_unified_global_imports(hs_code: str, years: list[int]) -> pd.DataFrame:
     """
     UNIFIED API CALL: Get ALL global import data in one massive query.
 
@@ -557,8 +555,8 @@ def fetch_unified_global_imports(hs_code: str, years: List[int]) -> pd.DataFrame
         return pd.DataFrame()
 
 
-def fetch_market_imports_batch(partner_codes: List[str], hs_code: str,
-                              years: List[int], unified_data: pd.DataFrame = None) -> pd.DataFrame:
+def fetch_market_imports_batch(partner_codes: list[str], hs_code: str,
+                              years: list[int], unified_data: pd.DataFrame = None) -> pd.DataFrame:
     """
     Fetch total import data for multiple partner markets using unified API call.
 
@@ -631,7 +629,7 @@ def fetch_market_imports_batch(partner_codes: List[str], hs_code: str,
 
 
 def fetch_market_imports(partner_code: str, hs_code: str,
-                        years: List[int]) -> pd.DataFrame:
+                        years: list[int]) -> pd.DataFrame:
     """
     Fetch total import data for a partner market (for market share calculations).
 
@@ -646,8 +644,8 @@ def fetch_market_imports(partner_code: str, hs_code: str,
     return pd.DataFrame(all_data)
 
 
-def fetch_market_imports_by_partner_batch(partner_codes: List[str], hs_code: str,
-                                        years: List[int], unified_data: pd.DataFrame = None) -> pd.DataFrame:
+def fetch_market_imports_by_partner_batch(partner_codes: list[str], hs_code: str,
+                                        years: list[int], unified_data: pd.DataFrame = None) -> pd.DataFrame:
     """
     Fetch import data for multiple markets broken down by supplier country using unified API call.
 
@@ -726,7 +724,7 @@ def fetch_market_imports_by_partner_batch(partner_codes: List[str], hs_code: str
 
 
 def fetch_market_imports_by_partner(partner_code: str, hs_code: str,
-                                   years: List[int]) -> pd.DataFrame:
+                                   years: list[int]) -> pd.DataFrame:
     """
     Fetch import data for a market broken down by supplier country.
     Used for market share and ranking calculations.
@@ -737,7 +735,7 @@ def fetch_market_imports_by_partner(partner_code: str, hs_code: str,
     return result.drop(columns=['partner_code']) if not result.empty else pd.DataFrame(columns=['year', 'supplier', 'trade_value'])
 
 
-def fetch_global_imports(hs_code: str, years: List[int], unified_data: pd.DataFrame = None) -> pd.DataFrame:
+def fetch_global_imports(hs_code: str, years: list[int], unified_data: pd.DataFrame = None) -> pd.DataFrame:
     """
     Fetch global import data for market size analysis using unified API call.
 
@@ -797,7 +795,7 @@ def fetch_global_imports(hs_code: str, years: List[int], unified_data: pd.DataFr
     return result
 
 
-def fetch_global_exports(hs_code: str, years: List[int]) -> pd.DataFrame:
+def fetch_global_exports(hs_code: str, years: list[int]) -> pd.DataFrame:
     """
     Fetch global export data for price comparison.
     Uses simplified approach to minimize API calls.
