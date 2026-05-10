@@ -1,279 +1,233 @@
-# Afghanistan Trade Intelligence Tool
+# AFG Market Diversification Tool
 
-A comprehensive market intelligence platform for analyzing Afghanistan's export performance across key agricultural and manufactured products. Built for UNDP to support evidence-based trade policy and economic development strategies.
+A market discovery platform that helps Afghan businesses and UNDP trade analysts identify and rank the best new export markets for Afghan products — modelled on the US government's [trade.gov Market Diversification Tool](https://www.trade.gov/market-diversification-tool) but built specifically for the Afghan export context.
 
-## Overview
+## What it does
 
-This tool analyzes Afghanistan's key export products using data from the UN Comtrade API for granular trade data. The tool provides detailed market intelligence by analyzing each HS code separately for precise insights.
+A user selects a product (by HS code or name), and the tool returns a ranked list of markets scored by a composite **Opportunity Score** (0–100). Each market is scored across eight dimensions:
 
-- **Target Products**: 9 individual HS codes across major Afghan export categories
-- **Separated Analysis**: Each HS code is analyzed independently to avoid aggregated distortions
-- **Key Indicators**:
-  - Largest markets for each specific HS code
-  - Growth rates for top markets (past 4 years: 2021-2024)
-  - Market share of Afghanistan and competitor analysis
-  - Price competitiveness (FOB value/volume) vs global average and top competitors
+| Dimension | Weight | Source |
+|-----------|--------|--------|
+| Market size (global imports of this product) | 20% | UN Comtrade |
+| Market growth (CAGR of imports) | 20% | UN Comtrade |
+| Market quality (governance, logistics) | 15% | World Bank WDI/WGI |
+| Price competitiveness | 15% | UN Comtrade |
+| Existing Afghan foothold | 10% | UN Comtrade (mirror stats) |
+| Geographic proximity to Kabul | 10% | Static lookup |
+| Language / cultural similarity | 5% | Static lookup |
+| FTA / preferential trade access | 5% | Static lookup |
 
-## Installation
+The tool also surfaces **practical next steps** per market (documentation, tariff claims, buyer contacts, trade fairs) as its key differentiator over existing tools.
+
+---
+
+## Architecture
+
+```
+UN Comtrade API + World Bank API
+        ↓
+  etl/  (fetch → transform → load)
+        ↓
+  PostgreSQL (trade data + opportunity scores)
+        ↓
+  backend/  (FastAPI — serves ranked markets + market profiles)
+        ↓
+  frontend/  (Next.js — discovery wizard UI)  ← planned
+```
+
+**Stack:** Python · FastAPI · PostgreSQL · Alembic · Docker Compose · Next.js (planned) · GitHub Actions
+
+---
+
+## Quick start
+
+### Prerequisites
+
+- Docker and Docker Compose
+- UN Comtrade API key ([register here](https://unstats.un.org/wiki/display/comtrade/UN+Comtrade+API))
+
+### 1. Configure environment
+
+```bash
+cp .env.example .env
+# Edit .env — set COMTRADE_API_KEY and POSTGRES_PASSWORD
+```
+
+### 2. Start services
+
+```bash
+docker-compose up -d
+```
+
+This starts PostgreSQL and the FastAPI backend. On first start, the backend container runs `alembic upgrade head` automatically.
+
+### 3. Run the ETL pipeline
+
+```bash
+# Full run — all 34 products + World Bank indicators
+docker-compose exec backend python -m etl.run
+
+# Specific products only
+docker-compose exec backend python -m etl.run --products Saffron "Dried Grapes (Raisins)"
+
+# Skip World Bank fetch (use cached data)
+docker-compose exec backend python -m etl.run --skip-world-bank
+
+# Dry run — fetch and transform but don't write to DB
+python -m etl.run --dry-run
+```
+
+### 4. Explore the API
+
+With the backend running at `http://localhost:8000`:
+
+```
+GET /api/discover/091020              → Ranked markets for Saffron
+GET /api/discover/091020?limit=10     → Top 10 markets only
+GET /api/discover/091020?min_score=60 → Markets scoring 60+
+GET /api/discover/091020/markets/699  → Full profile for India market
+GET /api/products                     → All products
+GET /api/products/091020              → Product detail with market indicators
+GET /api/indicators                   → Indicator definitions / tooltips
+GET /health                           → Health check
+```
+
+Interactive API docs: `http://localhost:8000/docs`
+
+---
+
+## Development
+
+### Run tests (no Docker needed)
 
 ```bash
 pip install -r requirements.txt
+pytest backend/tests/ -v
 ```
 
-## Usage
+Tests use an in-memory SQLite DB — no external dependencies.
 
-### Setup API Key
-
-You need a UN Comtrade API subscription key. Get one from: https://unstats.un.org/wiki/display/comtrade/UN+Comtrade+API
-
-Set it as an environment variable:
-```bash
-export COMTRADE_API_KEY="your_api_key_here"
-```
-
-Or set it in your code:
-```python
-from comtrade_client import set_api_key
-set_api_key("your_api_key_here")
-```
-
-### Test API Connectivity
-
-Test the UN Comtrade API connectivity:
+### Lint
 
 ```bash
-python test_api.py
+ruff check .
 ```
 
-This will verify that you can access the UN Comtrade API and retrieve data.
-
-### Run Full Analysis
-
-Run the main analysis:
+### Database migrations
 
 ```bash
-python main.py
+# Apply all migrations
+alembic upgrade head
+
+# Create a new migration
+alembic revision --autogenerate -m "description"
 ```
 
-Results will be saved in the `output/` directory:
-- `results_summary.csv`: Summary table with all indicators per product-market combination
-- `results_detailed.json`: Detailed results with full data including growth rates, competitor shares, etc.
+---
 
-## Interactive Dashboard
-
-The project includes a comprehensive self-contained web dashboard for visualizing trade intelligence data.
-
-### Dashboard Features
-
-- **9 Individual HS Code Products**: Almonds, Saffron, Grapes, Carpets, Cashmere (each analyzed separately)
-- **6 Interactive Charts**: Market share, export values, growth rates, pricing competitiveness, top importers, opportunity matrix
-- **Strategic Layout**: Top Global Importers positioned prominently in top-left for immediate market context
-- **Professional Design**: UNDP branded with clean, responsive interface
-- **Detailed Tooltips**: Click ℹ️ icons for comprehensive metric definitions
-- **Sorted Data**: All bar charts sorted descending for easy analysis
-- **Offline Ready**: Self-contained HTML with embedded data (no web server required)
-
-### Using the Dashboard
-
-1. **Open Dashboard**: Double-click `docs/dashboard_standalone.html` in any web browser
-2. **Select Product**: Choose from 9 individual HS code products in the dropdown
-3. **Explore Data**: All charts and tables update automatically
-4. **Get Details**: Click ℹ️ icons for metric explanations
-5. **Analyze Trends**: Review sorted bar charts and market opportunities
-
-### Regenerating the Dashboard
-
-After running new analysis:
-
-```bash
-python3 create_standalone_dashboard.py
-```
-
-This embeds the latest data into the dashboard for offline use.
-
-## Quick Start
-
-### For Analysis
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set API key (get from UN Comtrade)
-export COMTRADE_API_KEY="your_api_key_here"
-
-# Run analysis
-python main.py
-
-# Generate updated dashboard
-python3 create_standalone_dashboard.py
-```
-
-### For Dashboard Only
-```bash
-# Just open the dashboard (works offline)
-open docs/dashboard_standalone.html
-```
-
-## Project Structure
+## Project structure
 
 ```
-afghanistan-trade-intelligence/
-├── README.md                    # Project documentation
-├── requirements.txt            # Python dependencies
-├── .gitignore                  # Git ignore rules
-├── config.py                   # Product definitions and HS codes
-├── comtrade_client.py          # UN Comtrade API client
-├── indicators.py               # Trade indicator calculations
-├── main.py                     # Main analysis pipeline
-├── create_standalone_dashboard.py  # Dashboard generator
-├── docs/
-│   ├── index.html                 # GitHub Pages redirect page
-│   ├── dashboard_standalone.html   # Self-contained interactive dashboard (GitHub Pages)
-│   ├── undp_logo.png              # UNDP branding assets
-│   └── info_tooltip.jpg           # Tooltip icon
-├── indicator_definitions.json  # Metric definitions and tooltips
-└── output/                    # Analysis results (sample data included)
-    ├── results_detailed.json  # Detailed analysis results
-    └── results_summary.csv    # Summary export data
+afg-market-intelligence/
+├── config.py                    # Products (34 HS codes), score weights, country lookups
+├── requirements.txt
+├── pyproject.toml               # Ruff + pytest config
+├── alembic.ini
+├── .env.example
+├── docker-compose.yml
+├── Dockerfile.backend
+│
+├── etl/
+│   ├── fetch.py                 # Comtrade + World Bank API clients
+│   ├── transform.py             # Data normalisation + opportunity score computation
+│   ├── load.py                  # Idempotent PostgreSQL upserts
+│   └── run.py                   # ETL orchestrator (CLI entry point)
+│
+├── migrations/
+│   └── versions/
+│       ├── 0001_initial_schema.py
+│       └── 0002_market_context_and_scores.py
+│
+├── backend/
+│   ├── main.py                  # FastAPI app
+│   ├── database.py              # SQLAlchemy engine + session
+│   ├── models.py                # ORM models
+│   ├── schemas.py               # Pydantic response schemas
+│   ├── routers/
+│   │   ├── discovery.py         # GET /api/discover/*
+│   │   ├── products.py          # GET /api/products/*
+│   │   └── meta.py              # GET /api/indicators, /health
+│   ├── services/
+│   │   ├── discovery.py         # Ranked-market queries + next-step logic
+│   │   └── products.py          # Product/market indicator queries
+│   └── tests/
+│       └── test_api.py          # 21 contract tests (SQLite, no Docker)
+│
+├── frontend/                    # Next.js app — planned
+│
+├── indicator_definitions.json   # Metric definitions for UI tooltips
+│
+└── .github/workflows/
+    ├── ci.yml                   # Lint + tests on push to main / claude/**
+    └── etl.yml                  # Monthly ETL cron (1st of month, 02:00 UTC)
 ```
 
-## Data Sources & Methodology
+---
 
-### Data Sources
-- **UN Comtrade API**: Primary source for global trade statistics with 6-digit HS codes
-- **Mirror Statistics**: Afghanistan export data derived from partner countries' import records
-- **Analysis Period**: 2021-2024 (4-year trend analysis for robust growth calculations)
+## Products covered (34 HS codes)
 
-### Analytical Approach
-- **Individual HS Code Analysis**: Each 6-digit HS code analyzed separately to avoid aggregation distortions
-- **Comprehensive Market Coverage**: Top 10 global import markets per HS code
-- **Multi-Metric Intelligence**: 12+ indicators including market share, growth rates, pricing competitiveness
-- **Competitive Intelligence**: Comparison with top global suppliers in each market
+| Category | Products |
+|----------|----------|
+| Tree Nuts | Almonds (in-shell, shelled), Walnuts (in-shell, shelled), Pistachios (in-shell, shelled), Pine Nuts |
+| Spices & Herbs | Saffron, Cumin Seeds, Fenugreek, Asafoetida, Liquorice Root |
+| Dried Fruits | Dried Grapes (Raisins), Dried Apricots, Dried Figs, Dried Pomegranate, Dried Mulberries |
+| Fresh Fruits | Fresh Grapes, Fresh Pomegranate, Melons, Apricots |
+| Carpets & Textiles | Knotted Carpets, Woven Carpets, Kilims |
+| Luxury Fibres | Raw Cashmere, Processed Cashmere, Cashmere Sweaters, Karakul Sheepskin |
+| Minerals & Stones | Lapis Lazuli, Marble & Travertine, Talc |
+| Oilseeds | Sesame Seeds, Flaxseed / Linseed |
 
-### Key Indicators Calculated
-- Export values and market shares
-- Year-over-year and compound annual growth rates
-- Unit pricing and competitiveness analysis
-- Market ranking and competitive positioning
-- Global market size and opportunity assessment
+---
 
-## Notes
+## Data sources & methodology
 
-- **HS Code Format**: UN Comtrade accepts HS codes in various formats (e.g., 080211 or 0802.11)
-- **Data Availability**: Some years/products may have missing data - the tool handles this gracefully with warnings
-- **API Rate Limits**: Delays are included between API requests to respect rate limits
-- **Quantity Data**: Some indicators (like unit price) require quantity data, which may not always be available
-- **Market Share Calculations**: Requires fetching total import data for each market, which may take time
-- **Competitor Analysis**: Price comparisons with competitors may be limited if quantity data is not available
+### Trade data — UN Comtrade (mirror statistics)
+Afghanistan does not report directly to UN Comtrade. Instead, the pipeline uses **mirror statistics**: it queries other countries' import records where Afghanistan is listed as the exporting partner. This is the standard methodology for Afghanistan trade data.
 
-## Output Format
+### Market context — World Bank Development Indicators
+The ETL fetches per-country, per-year indicators from the World Bank API:
+- **GDP per capita** (`NY.GDP.PCAP.CD`) — market wealth / purchasing power
+- **Logistics Performance Index** (`LP.LPI.OVRL.XQ`) — supply-chain connectivity
+- **Regulatory Quality** (`RQ.EST`, WGI) — ease of doing business
+- **Political Stability** (`PV.EST`, WGI) — market risk
 
-### Summary CSV (`results_summary.csv`)
-Contains one row per product-market combination with:
-- Product name and market code
-- Export value and market rank
-- Market share percentage
-- Afghanistan's rank among suppliers
-- Growth rates (YoY, CAGR)
-- Unit price and comparisons to global average and competitors
+### Static lookups
+- **Distance from Kabul** — approximate straight-line km for ~60 trading partners
+- **Language similarity** — scored 0–1 based on Dari/Pashto overlap with trade-communication languages
+- **FTA status** — Afghanistan's memberships: SAPTA (South Asia), ECO (Central/West Asia), EU/UK GSP+
 
-### Detailed JSON (`results_detailed.json`)
-Contains full analysis results including:
-- Complete growth rate breakdowns
-- Competitor market shares
-- Detailed price competitiveness metrics
-- All raw data used in calculations
+### Opportunity score
+Each dimension is normalised to 0–100 before weighting. Score thresholds are configurable in `config.py` (`OPPORTUNITY_SCORE_WEIGHTS`).
 
-## Interactive Dashboard
+---
 
-The project includes a comprehensive web-based dashboard for visualizing trade intelligence data.
+## Environment variables
 
-### Features
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `COMTRADE_API_KEY` | Yes | UN Comtrade subscription key |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `POSTGRES_PASSWORD` | Docker only | Password for the `postgres` user |
 
-- **Product-Oriented Analysis**: Select from 9 individual HS code products
-- **UNDP Design System**: Professional styling using official UNDP colors and logo
-- **Interactive Tooltips**: Click ℹ️ icons for detailed metric definitions
-- **Strategic Dashboard Layout**:
-  - **Top Row**: **🗺️ Top Global Importers** (biggest markets) | Growth Rates (CAGR) | Afghanistan Export Values (current performance)
-  - **Bottom Row**: Market share distribution, pricing competitiveness, and market opportunity matrix (detailed insights)
-- **Multiple Visualizations**:
-  - **🗺️ Top Global Importers** (top-left - shows largest import markets worldwide in single color)
-  - **📈 Import Growth Rates (CAGR)** (performance trends, sorted descending)
-  - **💰 Afghanistan Export Value by Market** (current export distribution, sorted descending)
-  - **📊 Afghanistan Market Share** (penetration analysis, sorted descending)
-  - **💵 Afghanistan Pricing Competitiveness** (competitive positioning)
-  - **🎯 Market Opportunity Matrix** (strategic opportunities with larger, more visible bubbles)
-- **Detailed Data Tables**: Comprehensive market-by-market analysis
-- **Full-Tile Charts**: All visualizations fill their containers completely with proper padding for maximum data visibility
-- **Instant Rendering**: Charts load instantly without expansion animations for professional presentation
-- **Precise Layout**: Charts are perfectly contained within tile boundaries with no overflow
-- **Responsive Design**: Works on desktop and mobile devices
+---
 
-### Accessing the Dashboard
+## Roadmap
 
-#### Option 1: Standalone Dashboard (Recommended)
-1. Run `python3 create_standalone_dashboard.py` to generate a self-contained dashboard
-2. Open `docs/dashboard_standalone.html` in any web browser (works offline)
-3. Select a product to explore its market intelligence
-
-#### Option 2: Web Server Dashboard
-1. Ensure analysis results exist in `output/results_detailed.json`
-2. Start a local web server: `python3 -m http.server 8000`
-3. Open `http://localhost:8000/dashboard_example.html` in a web browser
-4. Select a product to explore its market intelligence
-
-#### Option 3: GitHub Pages (Online)
-The dashboard is automatically available online via GitHub Pages at:
-`https://[your-username].github.io/[repository-name]/`
-
-To set up GitHub Pages:
-1. Go to your repository settings
-2. Scroll to "Pages" section
-3. Select "Deploy from a branch"
-4. Choose "main" branch and "/docs" folder
-5. Save and wait for deployment (usually 1-2 minutes)
-
-The dashboard will be accessible at the repository's root URL, with an automatic redirect to the full dashboard.
-
-### Dashboard Files
-
-- `docs/dashboard_standalone.html`: Self-contained dashboard (recommended for offline use)
-- `dashboard_example.html`: Web server version (requires local server)
-- `create_standalone_dashboard.py`: Script to generate the standalone version
-- `indicator_definitions.json`: Metric definitions and descriptions
-
-### Current Product Coverage
-
-The tool analyzes 9 individual HS codes for precise market intelligence:
-
-- **Almonds**: 080211 (In-shell), 080212 (Shelled)
-- **Saffron**: 091020
-- **Grapes**: 080610 (Fresh), 080620 (Dried/Raisins)
-- **Carpets**: 570110 (Knotted), 570210 (Woven)
-- **Cashmere**: 510211 (Raw hair), 611012 (Sweaters)
-
-**Dashboard Layout Strategy:**
-- **🎯 Top Global Importers** is prominently positioned in TOP LEFT as the first chart users see
-- Clean single-color bars show the largest markets worldwide, setting the strategic context
-- Uniform blue coloring focuses attention on market size rather than Afghanistan's current position
-- Users instantly understand which countries represent the biggest global opportunities
-
-Each HS code is analyzed separately to provide accurate, undistorted market insights.
-
-### Key Metrics Displayed
-
-The dashboard visualizes all 12+ calculated indicators including:
-- **Afghanistan Export Values**: Current export values to each market
-- **Global Market Sizes**: Total import values for largest global markets
-- **Market Share Percentages**: Afghanistan's penetration in each market (displayed correctly as percentages)
-- **Growth Rates**: CAGR and YoY growth trends
-- **Price Competitiveness**: Competitive positioning vs. market averages
-- **Market Rankings**: Afghanistan's position among suppliers
-- **Top Global Importers**: Largest import markets worldwide (with Afghanistan's markets highlighted)
-
-## Data Quality Notes
-
-- **Mirror Statistics**: Afghanistan export data derived from partner countries' import records
-- **Multi-HS Code Aggregation**: Products analyzed across multiple related HS codes
-- **4-Year Analysis Period**: 2021-2024 for robust trend analysis
-- **Top 10 Markets**: Focus on most important global markets per product
+- [x] ETL pipeline (Comtrade + World Bank)
+- [x] Opportunity scoring model (8 dimensions, configurable weights)
+- [x] FastAPI backend with discovery + products endpoints
+- [x] Market-entry next steps per market
+- [ ] Next.js frontend — discovery wizard UI
+- [ ] Natural language → HS code classifier ("I sell dried figs")
+- [ ] Buyer contact directory integration
+- [ ] Simplified "business owner" view (vs. analyst view)
