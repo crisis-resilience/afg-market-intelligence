@@ -118,6 +118,10 @@ class Indicator(Base):
     regulatory_quality = Column(Numeric(6, 4))
     political_stability = Column(Numeric(6, 4))
 
+    # WITS tariff data
+    tariff_rate_pct = Column(Numeric(6, 3))
+    tariff_indicator = Column(Text)  # 'AHS' (preferential) or 'MFN' (general)
+
     # Sub-scores (0–100 each)
     score_market_size = Column(Numeric(5, 2))
     score_market_growth = Column(Numeric(5, 2))
@@ -127,6 +131,7 @@ class Indicator(Base):
     score_distance = Column(Numeric(5, 2))
     score_language = Column(Numeric(5, 2))
     score_fta = Column(Numeric(5, 2))
+    score_tariff = Column(Numeric(5, 2))
 
     computed_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 

@@ -23,14 +23,19 @@ PRICE_COMPETITIVENESS = {
 # Each dimension is normalised to 0–100 before weighting.
 OPPORTUNITY_SCORE_WEIGHTS = {
     "market_size": 0.20,         # global import volume for the product
-    "market_growth": 0.20,       # CAGR of global imports in this market
-    "market_quality": 0.15,      # World Bank governance + LPI composite
-    "price_competitiveness": 0.15,  # Afghan price vs market average
+    "market_growth": 0.18,       # CAGR of global imports in this market
+    "market_quality": 0.13,      # World Bank governance + LPI composite
+    "price_competitiveness": 0.13,  # Afghan price vs market average
+    "tariff": 0.10,              # effective import tariff rate from WITS
     "afg_foothold": 0.10,        # existing Afghan export presence
     "distance": 0.10,            # geographic proximity to Kabul
-    "language": 0.05,            # language / cultural similarity
-    "fta_status": 0.05,          # preferential trade access
+    "language": 0.04,            # language / cultural similarity
+    "fta_status": 0.02,          # preferential trade access (small bonus — mostly captured in tariff)
 }
+
+# Tariff scoring: maps tariff rate % to a 0–100 score.
+# 0% → 100, 10% → 70, 20% → 40, 33%+ → 0  (linear: score = max(0, 100 - rate * 3))
+TARIFF_SCORE_PER_PCT = 3.0
 
 # ── Geographic distance from Kabul, Afghanistan (approximate km) ───────────────
 # Keyed by Comtrade reporter/ISO numeric string (same codes used in trade data).

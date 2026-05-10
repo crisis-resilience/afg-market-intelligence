@@ -88,6 +88,7 @@ def run_product(
     cfg: dict,
     dry_run: bool,
     market_context: dict[str, dict],  # {country_code: {year: {field: value}}}
+    skip_tariffs: bool = False,
 ) -> dict:
     hs_codes = cfg["codes"]
     logger.info(f"▶  {product_name}  ({', '.join(hs_codes)})")
@@ -163,13 +164,60 @@ def run_product(
     all_market_sizes = _market_sizes_by_code(global_df, latest_year)
     ind_rows = transform.compute_indicators(product_id, all_codes, mirror_df, global_df, YEARS)
 
-    # 9. Enrich with opportunity scores
-    ind_rows = transform.enrich_indicators_with_scores(ind_rows, market_context, all_market_sizes)
+    # 9. Fetch tariffs for the markets we'll score
+    tariffs = {}
+    if not skip_tariffs:
+        try:
+            tariffs = _fetch_tariffs_for_product(all_codes, hs_codes, latest_year)
+            logger.info(f"  Fetched tariff data for {len(tariffs)} markets")
+        except Exception as exc:
+            logger.warning(f"  Tariff fetch failed: {exc} — continuing without tariff scores")
+            errors.append({"hs": ",".join(hs_codes), "stage": "fetch_tariffs", "error": str(exc)})
+
+    # 10. Enrich with opportunity scores
+    ind_rows = transform.enrich_indicators_with_scores(
+        ind_rows, market_context, all_market_sizes, tariffs=tariffs,
+    )
 
     n_ind = load.bulk_upsert_indicators(engine, ind_rows)
     logger.info(f"  Upserted {n_ind} indicator rows (all markets, with scores)")
 
     return {"product": product_name, "status": "success", "errors": errors}
+
+
+def _fetch_tariffs_for_product(market_codes: list[str], hs_codes: list[str],
+                               year: int) -> dict[str, dict]:
+    """
+    Fetch tariff data for the given markets and HS codes.
+    Returns {market_numeric_code: {'rate': float, 'indicator': str}} where rate
+    is averaged across the product's HS codes.
+    """
+    iso3_lookup = _load_numeric_to_iso3()
+    iso3_to_numeric = {v: k for k, v in iso3_lookup.items()}
+
+    iso3_markets = [iso3_lookup[c] for c in market_codes if c in iso3_lookup]
+    if not iso3_markets:
+        return {}
+
+    rows = fetch.fetch_tariff_rates(iso3_markets, hs_codes, year)
+
+    # Aggregate per market: average rate across the product's HS codes.
+    by_market: dict[str, list[float]] = {}
+    indicator_by_market: dict[str, str] = {}
+    for r in rows:
+        iso3 = r["market_iso3"]
+        by_market.setdefault(iso3, []).append(r["tariff_rate_pct"])
+        indicator_by_market[iso3] = r["indicator"]
+
+    result: dict[str, dict] = {}
+    for iso3, rates in by_market.items():
+        numeric = iso3_to_numeric.get(iso3)
+        if numeric:
+            result[numeric] = {
+                "rate": sum(rates) / len(rates),
+                "indicator": indicator_by_market.get(iso3),
+            }
+    return result
 
 
 def _resolve_market_name(global_df: pd.DataFrame, code: str) -> str | None:
@@ -212,6 +260,10 @@ def main():
         "--skip-world-bank", action="store_true",
         help="Skip World Bank indicator fetch (use existing market_context rows)",
     )
+    parser.add_argument(
+        "--skip-tariffs", action="store_true",
+        help="Skip WITS tariff fetch (faster runs; tariff scores default to neutral)",
+    )
     args = parser.parse_args()
 
     target = args.products or list(PRODUCTS.keys())
@@ -250,7 +302,8 @@ def main():
     all_errors = []
     for name in target:
         result = run_product(engine, name, PRODUCTS[name], dry_run=args.dry_run,
-                             market_context=market_context)
+                             market_context=market_context,
+                             skip_tariffs=args.skip_tariffs)
         results.append(result)
         all_errors.extend(result.get("errors", []))
 

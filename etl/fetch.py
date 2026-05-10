@@ -255,6 +255,138 @@ def fetch_world_bank_indicators(country_codes: list[str], years: list[int]) -> l
     return rows
 
 
+# ── WITS tariff data ─────────────────────────────────────────────────────────
+# WITS (World Integrated Trade Solution) by World Bank.
+# Returns SDMX/JSON. Endpoint format:
+#   reporter/{ISO3}/year/{YYYY}/partner/{ISO3}/product/{HS6 or 'all'}/indicator/{CODE}
+#
+# Indicator codes:
+#   AHS-SMPL-AVG = Effectively applied tariff, simple average (preferential rates included)
+#   MFN-SMPL-AVG = Most-Favoured Nation tariff, simple average (no preference)
+#
+# We try AHS first (with Afghanistan as partner) → falls back to MFN if no data.
+
+_WITS_BASE = "http://wits.worldbank.org/API/V1/SDMX/V21/datasource/TRN"
+
+_WITS_SESSION = requests.Session()
+_WITS_SESSION.verify = certifi.where()
+
+
+@retry(
+    retry=retry_if_exception_type((ConnectionError, TimeoutError, requests.RequestException)),
+    wait=wait_exponential(multiplier=1, min=2, max=16),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
+def _fetch_wits_tariffs(reporter_iso3: str, year: int, partner_iso3: str | None,
+                        indicator: str) -> dict[str, float]:
+    """
+    Fetch WITS tariff data for one (reporter, year, partner, indicator).
+    Returns {hs_code: tariff_pct}.
+
+    partner_iso3=None → MFN rates (no preferential treatment, no partner needed).
+    """
+    partner_segment = partner_iso3 if partner_iso3 else "000"  # 000 = world / MFN
+    url = (
+        f"{_WITS_BASE}/reporter/{reporter_iso3}/year/{year}"
+        f"/partner/{partner_segment}/product/all/indicator/{indicator}"
+    )
+    resp = _WITS_SESSION.get(url, params={"format": "JSON"}, timeout=30)
+    if resp.status_code == 404:
+        return {}
+    resp.raise_for_status()
+
+    try:
+        data = resp.json()
+    except ValueError:
+        return {}
+
+    return _parse_wits_response(data)
+
+
+def _parse_wits_response(data: dict) -> dict[str, float]:
+    """
+    Walk the SDMX-JSON structure to extract {hs_code: rate} mappings.
+    SDMX-JSON nests dimensions deeply; we navigate dataSets → series → observations.
+    """
+    try:
+        structure = data["structure"]
+        dimensions = structure["dimensions"]["series"]
+        # Find the index of the PRODUCTCODE dimension and its values
+        product_dim_idx = None
+        product_values: list[str] = []
+        for i, dim in enumerate(dimensions):
+            if dim.get("id") == "PRODUCTCODE":
+                product_dim_idx = i
+                product_values = [v["id"] for v in dim["values"]]
+                break
+        if product_dim_idx is None:
+            return {}
+
+        result: dict[str, float] = {}
+        for series_key, series in data["dataSets"][0]["series"].items():
+            key_parts = series_key.split(":")
+            product_idx = int(key_parts[product_dim_idx])
+            hs_code = product_values[product_idx]
+            # observations is {"0": [value, ...]} where 0 = first time period
+            obs = series.get("observations", {}).get("0")
+            if obs and obs[0] is not None:
+                result[hs_code] = float(obs[0])
+        return result
+    except (KeyError, IndexError, ValueError, TypeError):
+        return {}
+
+
+def fetch_tariff_rates(market_iso3_codes: list[str], hs_codes: list[str],
+                       year: int, partner_iso3: str = "AFG") -> list[dict]:
+    """
+    Fetch tariff rates for the given (market, hs_code) combinations.
+
+    For each market, makes ONE API call (`product=all`) and filters to our HS codes.
+    Tries AHS (effectively applied, with Afghanistan as partner) first;
+    falls back to MFN (general rate) if AHS is unavailable.
+
+    Returns list of dicts:
+      {market_code: ISO3, hs_code: str, tariff_rate_pct: float, indicator: 'AHS'|'MFN'}
+    """
+    rows = []
+    hs_set = {h.replace(".", "") for h in hs_codes}
+
+    for market_iso3 in market_iso3_codes:
+        # Try AHS (preferential rates, Afghanistan-specific) first
+        try:
+            tariffs = _fetch_wits_tariffs(market_iso3, year, partner_iso3, "AHS-SMPL-AVG")
+            indicator_used = "AHS"
+        except Exception as exc:
+            logger.warning(f"WITS AHS fetch failed for {market_iso3}: {exc}")
+            tariffs = {}
+            indicator_used = "AHS"
+
+        # Fall back to MFN (general rates) if AHS returned nothing
+        if not tariffs:
+            try:
+                tariffs = _fetch_wits_tariffs(market_iso3, year, None, "MFN-SMPL-AVG")
+                indicator_used = "MFN"
+            except Exception as exc:
+                logger.warning(f"WITS MFN fetch failed for {market_iso3}: {exc}")
+                tariffs = {}
+
+        for hs in hs_set:
+            rate = tariffs.get(hs)
+            if rate is not None:
+                rows.append({
+                    "market_iso3": market_iso3,
+                    "hs_code": hs,
+                    "tariff_rate_pct": float(rate),
+                    "indicator": indicator_used,
+                })
+
+        time.sleep(0.3)  # respectful spacing
+
+    logger.info(f"WITS tariff fetch complete: {len(rows)} rates across {len(market_iso3_codes)} markets")
+    return rows
+
+
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 def _normalise_mirror(df: pd.DataFrame, hs_code: str) -> pd.DataFrame:

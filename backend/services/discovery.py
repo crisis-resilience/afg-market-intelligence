@@ -45,6 +45,8 @@ def get_ranked_markets(
             i.distance_km,
             i.has_fta,
             i.language_similarity,
+            i.tariff_rate_pct,
+            i.tariff_indicator,
             i.score_market_size,
             i.score_market_growth,
             i.score_market_quality,
@@ -53,6 +55,7 @@ def get_ranked_markets(
             i.score_distance,
             i.score_language,
             i.score_fta,
+            i.score_tariff,
             i.gdp_per_capita_usd,
             i.lpi_score,
             i.regulatory_quality,
@@ -86,6 +89,7 @@ def get_ranked_markets(
             "distance_km": r["distance_km"],
             "has_fta": r["has_fta"],
             "language_similarity": _f(r["language_similarity"]),
+            "tariff_rate_pct": _f(r["tariff_rate_pct"]),
             "score_breakdown": {
                 "market_size": _f(r["score_market_size"]),
                 "market_growth": _f(r["score_market_growth"]),
@@ -95,12 +99,15 @@ def get_ranked_markets(
                 "distance": _f(r["score_distance"]),
                 "language": _f(r["score_language"]),
                 "fta_status": _f(r["score_fta"]),
+                "tariff": _f(r["score_tariff"]),
             },
             "context": {
                 "gdp_per_capita_usd": _f(r["gdp_per_capita_usd"]),
                 "lpi_score": _f(r["lpi_score"]),
                 "regulatory_quality": _f(r["regulatory_quality"]),
                 "political_stability": _f(r["political_stability"]),
+                "tariff_rate_pct": _f(r["tariff_rate_pct"]),
+                "tariff_indicator": r["tariff_indicator"],
             },
         })
 
@@ -185,12 +192,15 @@ def get_market_profile(db: Session, hs_code: str, market_code: str) -> dict | No
             "distance": _f(row["score_distance"]),
             "language": _f(row["score_language"]),
             "fta_status": _f(row["score_fta"]),
+            "tariff": _f(row["score_tariff"]),
         },
         "context": {
             "gdp_per_capita_usd": _f(row["gdp_per_capita_usd"]),
             "lpi_score": _f(row["lpi_score"]),
             "regulatory_quality": _f(row["regulatory_quality"]),
             "political_stability": _f(row["political_stability"]),
+            "tariff_rate_pct": _f(row["tariff_rate_pct"]),
+            "tariff_indicator": row["tariff_indicator"],
         },
         "trade": {
             "market_code": market_code,
@@ -251,6 +261,8 @@ def _build_next_steps(row, market_code: str) -> list[dict]:
     has_fta = row.get("has_fta")
     dist = row.get("distance_km")
     competitiveness = row.get("price_competitiveness")
+    tariff_rate = row.get("tariff_rate_pct")
+    tariff_indicator = row.get("tariff_indicator")
 
     steps.append({
         "order": order,
@@ -276,6 +288,34 @@ def _build_next_steps(row, market_code: str) -> list[dict]:
             "resource_url": None,
         })
         order += 1
+
+    if tariff_rate is not None:
+        rate_pct = float(tariff_rate)
+        rate_label = f"{rate_pct:.1f}%"
+        if rate_pct >= 15:
+            steps.append({
+                "order": order,
+                "title": f"Plan for high import tariff ({rate_label})",
+                "description": (
+                    f"This market levies an import tariff of {rate_label} on Afghan goods "
+                    f"({'preferential' if tariff_indicator == 'AHS' else 'MFN'} rate). "
+                    "Factor this into your pricing strategy and explore tariff-engineering "
+                    "options (e.g., shipping at an earlier processing stage with lower duty)."
+                ),
+                "resource_url": "https://wits.worldbank.org/",
+            })
+            order += 1
+        elif rate_pct < 5:
+            steps.append({
+                "order": order,
+                "title": f"Low tariff barrier ({rate_label}) — accelerate market entry",
+                "description": (
+                    f"This market has a low import duty of {rate_label}, lowering the "
+                    "cost barrier to entry. Prioritise this market in your sales pipeline."
+                ),
+                "resource_url": None,
+            })
+            order += 1
 
     if dist is not None and dist < 3000:
         steps.append({

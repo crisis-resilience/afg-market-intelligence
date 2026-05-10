@@ -135,6 +135,7 @@ class ScoreBreakdown(BaseModel):
     distance: float | None
     language: float | None
     fta_status: float | None
+    tariff: float | None = None
 
 
 class MarketContextData(BaseModel):
@@ -142,6 +143,8 @@ class MarketContextData(BaseModel):
     lpi_score: float | None
     regulatory_quality: float | None
     political_stability: float | None
+    tariff_rate_pct: float | None = None
+    tariff_indicator: str | None = None
 
 
 class MarketOpportunity(BaseModel):
@@ -158,6 +161,7 @@ class MarketOpportunity(BaseModel):
     distance_km: int | None
     has_fta: bool | None
     language_similarity: float | None
+    tariff_rate_pct: float | None = None
     score_breakdown: ScoreBreakdown
     context: MarketContextData
 

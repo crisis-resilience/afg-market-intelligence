@@ -20,6 +20,7 @@ from config import (
     LANGUAGE_SIMILARITY_DEFAULT,
     OPPORTUNITY_SCORE_WEIGHTS,
     PRICE_COMPETITIVENESS,
+    TARIFF_SCORE_PER_PCT,
 )
 
 logger = logging.getLogger(__name__)
@@ -319,6 +320,7 @@ def enrich_indicators_with_scores(
     indicator_rows: list[dict],
     market_context: dict[str, dict],  # {country_code: {year: {field: value}}}
     all_market_sizes: dict[str, float],  # {market_code: global_market_size_usd latest year}
+    tariffs: dict[str, dict] | None = None,  # {market_code (M49): {'rate': float, 'indicator': str}}
 ) -> list[dict]:
     """
     Attach opportunity scores to already-computed indicator rows.
@@ -326,11 +328,13 @@ def enrich_indicators_with_scores(
     Each row in indicator_rows is mutated in place (new keys added) and returned.
     market_context is keyed by Comtrade numeric country code → year → field.
     all_market_sizes provides cross-market normalisation for the size dimension.
+    tariffs is keyed by Comtrade numeric code → {rate, indicator}.
     """
     if not indicator_rows:
         return indicator_rows
 
     weights = OPPORTUNITY_SCORE_WEIGHTS
+    tariffs = tariffs or {}
 
     # Pre-compute log-normalised market size across all markets for this product
     sizes = [v for v in all_market_sizes.values() if v and v > 0]
@@ -357,6 +361,12 @@ def enrich_indicators_with_scores(
         row["regulatory_quality"] = ctx.get("regulatory_quality")
         row["political_stability"] = ctx.get("political_stability")
 
+        # ── Tariff (WITS) ─────────────────────────────────────────────────────
+        tariff_info = tariffs.get(mc) or {}
+        tariff_rate = tariff_info.get("rate")
+        row["tariff_rate_pct"] = tariff_rate
+        row["tariff_indicator"] = tariff_info.get("indicator")
+
         # ── Dimension scores (0–100) ─────────────────────────────────────────
         s_size = _score_market_size(row.get("global_market_size_usd"), log_max)
         s_growth = _score_growth(row.get("cagr_pct"))
@@ -366,6 +376,7 @@ def enrich_indicators_with_scores(
         s_distance = _score_distance(dist_km)
         s_language = lang * 100
         s_fta = 100.0 if fta else 0.0
+        s_tariff = _score_tariff(tariff_rate)
 
         row["score_market_size"] = round(s_size, 2)
         row["score_market_growth"] = round(s_growth, 2)
@@ -375,12 +386,14 @@ def enrich_indicators_with_scores(
         row["score_distance"] = round(s_distance, 2)
         row["score_language"] = round(s_language, 2)
         row["score_fta"] = round(s_fta, 2)
+        row["score_tariff"] = round(s_tariff, 2)
 
         composite = (
             s_size * weights["market_size"]
             + s_growth * weights["market_growth"]
             + s_quality * weights["market_quality"]
             + s_price * weights["price_competitiveness"]
+            + s_tariff * weights["tariff"]
             + s_foothold * weights["afg_foothold"]
             + s_distance * weights["distance"]
             + s_language * weights["language"]
@@ -451,3 +464,13 @@ def _score_distance(dist_km: int | None) -> float:
     if dist_km is None:
         return 50.0  # neutral default
     return max(0.0, 100.0 - dist_km / 150)
+
+
+def _score_tariff(rate_pct: float | None) -> float:
+    """
+    Lower tariff is better. 0% → 100, ~33% → 0 (linear).
+    Returns a neutral 50 when tariff data is unavailable.
+    """
+    if rate_pct is None:
+        return 50.0
+    return max(0.0, 100.0 - float(rate_pct) * TARIFF_SCORE_PER_PCT)

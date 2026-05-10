@@ -135,6 +135,8 @@ def create_tables():
                 lpi_score REAL,
                 regulatory_quality REAL,
                 political_stability REAL,
+                tariff_rate_pct REAL,
+                tariff_indicator TEXT,
                 score_market_size REAL,
                 score_market_growth REAL,
                 score_market_quality REAL,
@@ -143,6 +145,7 @@ def create_tables():
                 score_distance REAL,
                 score_language REAL,
                 score_fta REAL,
+                score_tariff REAL,
                 computed_at TEXT,
                 UNIQUE(product_id, market_code, computed_for_year)
             )
@@ -189,9 +192,10 @@ def seeded_db():
                 first_year, last_year, price_competitiveness,
                 opportunity_score, distance_km, has_fta, language_similarity,
                 gdp_per_capita_usd, lpi_score, regulatory_quality, political_stability,
+                tariff_rate_pct, tariff_indicator,
                 score_market_size, score_market_growth, score_market_quality,
                 score_price_competitiveness, score_afg_foothold,
-                score_distance, score_language, score_fta
+                score_distance, score_language, score_fta, score_tariff
             )
             SELECT
                 p.id, '699', 2024,
@@ -201,7 +205,8 @@ def seeded_db():
                 2021, 2024, 'Competitive',
                 72.5, 1000, 0, 0.2,
                 2200, 3.5, 0.8, 0.5,
-                65.0, 60.0, 70.0, 75.0, 45.0, 93.0, 20.0, 0.0
+                30.0, 'AHS',
+                65.0, 60.0, 70.0, 75.0, 45.0, 93.0, 20.0, 0.0, 10.0
             FROM products p WHERE p.name = 'Saffron'
         """))
         db.execute(text("""
@@ -213,9 +218,10 @@ def seeded_db():
                 first_year, last_year, price_competitiveness,
                 opportunity_score, distance_km, has_fta, language_similarity,
                 gdp_per_capita_usd, lpi_score, regulatory_quality, political_stability,
+                tariff_rate_pct, tariff_indicator,
                 score_market_size, score_market_growth, score_market_quality,
                 score_price_competitiveness, score_afg_foothold,
-                score_distance, score_language, score_fta
+                score_distance, score_language, score_fta, score_tariff
             )
             SELECT
                 p.id, '276', 2024,
@@ -225,7 +231,8 @@ def seeded_db():
                 2021, 2024, 'Average',
                 68.0, 5500, 1, 0.05,
                 48000, 4.1, 1.5, 0.9,
-                70.0, 55.0, 88.0, 50.0, 38.0, 33.0, 5.0, 100.0
+                0.0, 'AHS',
+                70.0, 55.0, 88.0, 50.0, 38.0, 33.0, 5.0, 100.0, 100.0
             FROM products p WHERE p.name = 'Saffron'
         """))
         db.execute(text("""
@@ -360,7 +367,7 @@ class TestDiscovery:
         bd = m["score_breakdown"]
         for key in ("market_size", "market_growth", "market_quality",
                     "price_competitiveness", "afg_foothold",
-                    "distance", "language", "fta_status"):
+                    "distance", "language", "fta_status", "tariff"):
             assert key in bd
 
     def test_market_row_has_context(self, client, seeded_db):
@@ -369,8 +376,26 @@ class TestDiscovery:
         assert len(markets) > 0
         ctx = markets[0]["context"]
         for key in ("gdp_per_capita_usd", "lpi_score",
-                    "regulatory_quality", "political_stability"):
+                    "regulatory_quality", "political_stability",
+                    "tariff_rate_pct", "tariff_indicator"):
             assert key in ctx
+
+    def test_market_row_has_tariff(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        markets = r.json()["markets"]
+        # Find India (market_code 699) which we seeded with 30% tariff
+        india = next((m for m in markets if m["market_code"] == "699"), None)
+        assert india is not None
+        assert india["tariff_rate_pct"] == 30.0
+        assert india["context"]["tariff_indicator"] == "AHS"
+
+    def test_high_tariff_market_gets_low_tariff_score(self, client, seeded_db):
+        r = client.get("/api/discover/091020")
+        markets = r.json()["markets"]
+        india = next(m for m in markets if m["market_code"] == "699")
+        germany = next(m for m in markets if m["market_code"] == "276")
+        # Germany has 0% tariff (score 100), India has 30% tariff (score 10)
+        assert germany["score_breakdown"]["tariff"] > india["score_breakdown"]["tariff"]
 
     def test_limit_param(self, client, seeded_db):
         r = client.get("/api/discover/091020?limit=1")
@@ -407,6 +432,13 @@ class TestDiscovery:
         assert "order" in step
         assert "title" in step
         assert "description" in step
+
+    def test_high_tariff_triggers_tariff_next_step(self, client, seeded_db):
+        # India has 30% tariff in fixtures — should trigger the high-tariff guidance
+        r = client.get("/api/discover/091020/markets/699")
+        steps = r.json()["next_steps"]
+        titles = [s["title"] for s in steps]
+        assert any("tariff" in t.lower() for t in titles)
 
     def test_market_profile_404_on_unknown(self, client):
         r = client.get("/api/discover/091020/markets/ZZZZ")

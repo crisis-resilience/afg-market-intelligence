@@ -152,9 +152,10 @@ def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
             price_vs_market_pct, price_competitiveness,
             opportunity_score, distance_km, has_fta, language_similarity,
             gdp_per_capita_usd, lpi_score, regulatory_quality, political_stability,
+            tariff_rate_pct, tariff_indicator,
             score_market_size, score_market_growth, score_market_quality,
             score_price_competitiveness, score_afg_foothold,
-            score_distance, score_language, score_fta,
+            score_distance, score_language, score_fta, score_tariff,
             computed_at
         ) VALUES (
             :product_id, :market_code, :computed_for_year,
@@ -166,9 +167,10 @@ def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
             :price_vs_market_pct, :price_competitiveness,
             :opportunity_score, :distance_km, :has_fta, :language_similarity,
             :gdp_per_capita_usd, :lpi_score, :regulatory_quality, :political_stability,
+            :tariff_rate_pct, :tariff_indicator,
             :score_market_size, :score_market_growth, :score_market_quality,
             :score_price_competitiveness, :score_afg_foothold,
-            :score_distance, :score_language, :score_fta,
+            :score_distance, :score_language, :score_fta, :score_tariff,
             NOW()
         )
         ON CONFLICT (product_id, market_code, computed_for_year) DO UPDATE SET
@@ -194,6 +196,8 @@ def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
             lpi_score                   = EXCLUDED.lpi_score,
             regulatory_quality          = EXCLUDED.regulatory_quality,
             political_stability         = EXCLUDED.political_stability,
+            tariff_rate_pct             = EXCLUDED.tariff_rate_pct,
+            tariff_indicator            = EXCLUDED.tariff_indicator,
             score_market_size           = EXCLUDED.score_market_size,
             score_market_growth         = EXCLUDED.score_market_growth,
             score_market_quality        = EXCLUDED.score_market_quality,
@@ -202,6 +206,7 @@ def bulk_upsert_indicators(engine: Engine, rows: list[dict]) -> int:
             score_distance              = EXCLUDED.score_distance,
             score_language              = EXCLUDED.score_language,
             score_fta                   = EXCLUDED.score_fta,
+            score_tariff                = EXCLUDED.score_tariff,
             computed_at                 = NOW()
     """)
     with engine.begin() as conn:

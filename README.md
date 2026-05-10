@@ -9,13 +9,14 @@ A user selects a product (by HS code or name), and the tool returns a ranked lis
 | Dimension | Weight | Source |
 |-----------|--------|--------|
 | Market size (global imports of this product) | 20% | UN Comtrade |
-| Market growth (CAGR of imports) | 20% | UN Comtrade |
-| Market quality (governance, logistics) | 15% | World Bank WDI/WGI |
-| Price competitiveness | 15% | UN Comtrade |
+| Market growth (CAGR of imports) | 18% | UN Comtrade |
+| Market quality (governance, logistics) | 13% | World Bank WDI/WGI |
+| Price competitiveness | 13% | UN Comtrade |
+| Tariff rate on Afghan goods | 10% | WITS (World Bank) |
 | Existing Afghan foothold | 10% | UN Comtrade (mirror stats) |
 | Geographic proximity to Kabul | 10% | Static lookup |
-| Language / cultural similarity | 5% | Static lookup |
-| FTA / preferential trade access | 5% | Static lookup |
+| Language / cultural similarity | 4% | Static lookup |
+| FTA / preferential trade access | 2% | Static lookup |
 
 The tool also surfaces **practical next steps** per market (documentation, tariff claims, buyer contacts, trade fairs) as its key differentiator over existing tools.
 
@@ -72,6 +73,9 @@ docker-compose exec backend python -m etl.run --products Saffron "Dried Grapes (
 
 # Skip World Bank fetch (use cached data)
 docker-compose exec backend python -m etl.run --skip-world-bank
+
+# Skip WITS tariff fetch (faster runs, neutral tariff scores)
+docker-compose exec backend python -m etl.run --skip-tariffs
 
 # Dry run — fetch and transform but don't write to DB
 python -m etl.run --dry-run
@@ -201,6 +205,13 @@ The ETL fetches per-country, per-year indicators from the World Bank API:
 - **Regulatory Quality** (`RQ.EST`, WGI) — ease of doing business
 - **Political Stability** (`PV.EST`, WGI) — market risk
 
+### Tariffs — WITS (World Integrated Trade Solution)
+For each (market, HS code) pair, the ETL queries the WITS REST API:
+- Tries **AHS-SMPL-AVG** first — effectively applied tariff with Afghanistan as the partner (captures preferential rates from FTAs)
+- Falls back to **MFN-SMPL-AVG** when no AHS data is available — the Most Favoured Nation rate that applies by default
+
+The `tariff_indicator` field on each market profile tells you which series the rate came from.
+
 ### Static lookups
 - **Distance from Kabul** — approximate straight-line km for ~60 trading partners
 - **Language similarity** — scored 0–1 based on Dari/Pashto overlap with trade-communication languages
@@ -223,10 +234,10 @@ Each dimension is normalised to 0–100 before weighting. Score thresholds are c
 
 ## Roadmap
 
-- [x] ETL pipeline (Comtrade + World Bank)
-- [x] Opportunity scoring model (8 dimensions, configurable weights)
+- [x] ETL pipeline (Comtrade + World Bank + WITS tariffs)
+- [x] Opportunity scoring model (9 dimensions, configurable weights)
 - [x] FastAPI backend with discovery + products endpoints
-- [x] Market-entry next steps per market
+- [x] Market-entry next steps per market (incl. tariff-aware guidance)
 - [ ] Next.js frontend — discovery wizard UI
 - [ ] Natural language → HS code classifier ("I sell dried figs")
 - [ ] Buyer contact directory integration
