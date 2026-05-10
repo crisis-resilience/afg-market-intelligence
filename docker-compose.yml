@@ -32,5 +32,17 @@ services:
     volumes:
       - ./indicator_definitions.json:/app/indicator_definitions.json:ro
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
