@@ -144,8 +144,8 @@ def run_product(
         logger.info(f"  [dry-run] Skipping DB writes for {product_name}")
         return {"product": product_name, "status": "dry_run", "errors": errors}
 
-    # 5. Upsert market rows (top markets only — others populated on demand)
-    for code in top_codes:
+    # 5. Upsert market rows for all scored markets
+    for code in all_codes:
         name = _resolve_market_name(global_df, code)
         load.upsert_market(engine, code, name)
 
