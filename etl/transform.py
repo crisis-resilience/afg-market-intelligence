@@ -141,7 +141,7 @@ def compute_indicators(
         # Market share
         market_share_pct = (
             (afg_value_latest / global_market_size * 100)
-            if global_market_size and global_market_size > 0
+            if afg_value_latest is not None and global_market_size and global_market_size > 0
             else None
         )
 
