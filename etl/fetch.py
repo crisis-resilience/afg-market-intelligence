@@ -413,7 +413,6 @@ def fetch_tariff_rates(market_iso3_codes: list[str], hs_codes: list[str],
       {market_iso3: str, hs_code: str, tariff_rate_pct: float, indicator: 'AHS'|'MFN'}
     """
     hs_set = {h.replace(".", "") for h in hs_codes}
-    market_set = set(market_iso3_codes)
     years_desc = sorted(years, reverse=True)
 
     # --- Attempt bulk fetch (reporter=ALL) ---
