@@ -168,7 +168,7 @@ def run_product(
     tariffs = {}
     if not skip_tariffs:
         try:
-            tariffs = _fetch_tariffs_for_product(all_codes, hs_codes, latest_year)
+            tariffs = _fetch_tariffs_for_product(all_codes, hs_codes, YEARS)
             logger.info(f"  Fetched tariff data for {len(tariffs)} markets")
         except Exception as exc:
             logger.warning(f"  Tariff fetch failed: {exc} — continuing without tariff scores")
@@ -186,7 +186,7 @@ def run_product(
 
 
 def _fetch_tariffs_for_product(market_codes: list[str], hs_codes: list[str],
-                               year: int) -> dict[str, dict]:
+                               years: list[int]) -> dict[str, dict]:
     """
     Fetch tariff data for the given markets and HS codes.
     Returns {market_numeric_code: {'rate': float, 'indicator': str}} where rate
@@ -199,7 +199,7 @@ def _fetch_tariffs_for_product(market_codes: list[str], hs_codes: list[str],
     if not iso3_markets:
         return {}
 
-    rows = fetch.fetch_tariff_rates(iso3_markets, hs_codes, year)
+    rows = fetch.fetch_tariff_rates(iso3_markets, hs_codes, years)
 
     # Aggregate per market: average rate across the product's HS codes.
     by_market: dict[str, list[float]] = {}

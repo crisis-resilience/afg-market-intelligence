@@ -292,7 +292,8 @@ def _fetch_wits_tariffs(reporter_iso3: str, year: int, partner_iso3: str | None,
         f"/partner/{partner_segment}/product/all/indicator/{indicator}"
     )
     resp = _WITS_SESSION.get(url, params={"format": "JSON"}, timeout=30)
-    if resp.status_code == 404:
+    if resp.status_code in (403, 404):
+        # 403 = year not yet in WITS database (data lags 2–3 years); 404 = no data
         return {}
     resp.raise_for_status()
 
@@ -338,38 +339,48 @@ def _parse_wits_response(data: dict) -> dict[str, float]:
 
 
 def fetch_tariff_rates(market_iso3_codes: list[str], hs_codes: list[str],
-                       year: int, partner_iso3: str = "AFG") -> list[dict]:
+                       years: list[int], partner_iso3: str = "AFG") -> list[dict]:
     """
     Fetch tariff rates for the given (market, hs_code) combinations.
 
-    For each market, makes ONE API call (`product=all`) and filters to our HS codes.
-    Tries AHS (effectively applied, with Afghanistan as partner) first;
-    falls back to MFN (general rate) if AHS is unavailable.
+    For each market, tries years in descending order until data is found (WITS tariff
+    data lags 2–3 years; 403 means the year doesn't exist in the database yet).
+    Within each year, tries AHS (effectively applied, Afghanistan as partner) first,
+    then falls back to MFN (general rate).
 
     Returns list of dicts:
-      {market_code: ISO3, hs_code: str, tariff_rate_pct: float, indicator: 'AHS'|'MFN'}
+      {market_iso3: str, hs_code: str, tariff_rate_pct: float, indicator: 'AHS'|'MFN'}
     """
     rows = []
     hs_set = {h.replace(".", "") for h in hs_codes}
+    years_desc = sorted(years, reverse=True)
 
     for market_iso3 in market_iso3_codes:
-        # Try AHS (preferential rates, Afghanistan-specific) first
-        try:
-            tariffs = _fetch_wits_tariffs(market_iso3, year, partner_iso3, "AHS-SMPL-AVG")
-            indicator_used = "AHS"
-        except Exception as exc:
-            logger.warning(f"WITS AHS fetch failed for {market_iso3}: {exc}")
-            tariffs = {}
-            indicator_used = "AHS"
+        tariffs: dict[str, float] = {}
+        indicator_used = "MFN"
 
-        # Fall back to MFN (general rates) if AHS returned nothing
-        if not tariffs:
+        for year in years_desc:
+            # Try AHS first (preferential rates, Afghanistan-specific)
             try:
-                tariffs = _fetch_wits_tariffs(market_iso3, year, None, "MFN-SMPL-AVG")
-                indicator_used = "MFN"
+                tariffs = _fetch_wits_tariffs(market_iso3, year, partner_iso3, "AHS-SMPL-AVG")
+                indicator_used = "AHS"
             except Exception as exc:
-                logger.warning(f"WITS MFN fetch failed for {market_iso3}: {exc}")
+                logger.warning(f"WITS AHS fetch failed for {market_iso3} {year}: {exc}")
                 tariffs = {}
+
+            # Fall back to MFN (general rates) if AHS returned nothing
+            if not tariffs:
+                try:
+                    tariffs = _fetch_wits_tariffs(market_iso3, year, None, "MFN-SMPL-AVG")
+                    indicator_used = "MFN"
+                except Exception as exc:
+                    logger.warning(f"WITS MFN fetch failed for {market_iso3} {year}: {exc}")
+                    tariffs = {}
+
+            if tariffs:
+                if year < years_desc[0]:
+                    logger.info(f"WITS: using {year} data for {market_iso3} (latest year unavailable)")
+                break  # found data for this market — stop trying earlier years
 
         for hs in hs_set:
             rate = tariffs.get(hs)
