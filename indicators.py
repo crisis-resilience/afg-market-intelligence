@@ -3,17 +3,19 @@ Indicator calculation functions for trade analysis.
 Calculates market size, growth rates, market shares, and price competitiveness.
 """
 
-import pandas as pd
-import numpy as np
 import logging
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Any
+
+import numpy as np
+import pandas as pd
+
 from config import AFGHANISTAN_CODE
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-def identify_top_global_import_markets(hs_code: str, years: List[int], top_n: int = 5, unified_data: pd.DataFrame = None) -> pd.DataFrame:
+def identify_top_global_import_markets(hs_code: str, years: list[int], top_n: int = 5, unified_data: pd.DataFrame = None) -> pd.DataFrame:
     """
     Identify top global import markets for a product by total import value.
 
@@ -66,7 +68,7 @@ def identify_top_global_import_markets(hs_code: str, years: List[int], top_n: in
 
 
 def identify_top_markets(df_exports: pd.DataFrame, top_n: int = 10,
-                        year: Optional[int] = None) -> pd.DataFrame:
+                        year: int | None = None) -> pd.DataFrame:
     """
     Identify top N markets by export value.
     
@@ -112,7 +114,7 @@ def identify_top_markets(df_exports: pd.DataFrame, top_n: int = 10,
 
 
 def calculate_growth_rate(df_exports: pd.DataFrame, market_code: str,
-                          years: List[int]) -> Dict[str, float]:
+                          years: list[int]) -> dict[str, float]:
     """
     Calculate growth rate for a specific market over the past 5 years.
     
@@ -203,7 +205,7 @@ def calculate_growth_rate(df_exports: pd.DataFrame, market_code: str,
 
 
 def calculate_market_share(afg_exports: pd.DataFrame, total_imports: pd.DataFrame,
-                          market_code: str, year: Optional[int] = None) -> float:
+                          market_code: str, year: int | None = None) -> float:
     """
     Calculate Afghanistan's market share in a specific market.
     
@@ -253,7 +255,7 @@ def calculate_market_share(afg_exports: pd.DataFrame, total_imports: pd.DataFram
 
 
 def get_market_rank(afg_exports: pd.DataFrame, all_suppliers: pd.DataFrame,
-                   market_code: str, year: Optional[int] = None) -> int:
+                   market_code: str, year: int | None = None) -> int:
     """
     Get Afghanistan's rank among all suppliers to a market.
     
@@ -335,7 +337,7 @@ def get_market_rank(afg_exports: pd.DataFrame, all_suppliers: pd.DataFrame,
 
 
 def get_competitor_shares(all_suppliers: pd.DataFrame, market_code: str,
-                         top_n: int = 5, year: Optional[int] = None) -> pd.DataFrame:
+                         top_n: int = 5, year: int | None = None) -> pd.DataFrame:
     """
     Get top competitors' market shares in a specific market.
 
@@ -389,8 +391,8 @@ def get_competitor_shares(all_suppliers: pd.DataFrame, market_code: str,
 
 
 def calculate_unit_price(df_exports: pd.DataFrame, 
-                        partner: Optional[str] = None,
-                        year: Optional[int] = None) -> float:
+                        partner: str | None = None,
+                        year: int | None = None) -> float:
     """
     Calculate unit price (FOB value / volume) for exports.
     
@@ -444,7 +446,7 @@ def calculate_unit_price(df_exports: pd.DataFrame,
 
 
 def compare_to_global_average(afg_unit_price: float, global_prices: pd.DataFrame,
-                              year: Optional[int] = None) -> Dict[str, float]:
+                              year: int | None = None) -> dict[str, float]:
     """
     Compare Afghanistan's unit price to global average.
     
@@ -527,7 +529,7 @@ def compare_to_global_average(afg_unit_price: float, global_prices: pd.DataFrame
 
 
 def compare_to_competitors_in_market(afg_unit_price: float, competitor_data: pd.DataFrame,
-                                    market_code: str) -> Dict[str, Any]:
+                                    market_code: str) -> dict[str, Any]:
     """
     Compare Afghanistan's unit price to competitors in a specific target market.
 
@@ -602,7 +604,7 @@ def compare_to_competitors_in_market(afg_unit_price: float, competitor_data: pd.
 
 
 def compare_to_competitors(afg_unit_price: float, competitor_prices: pd.DataFrame,
-                          top_n: int = 5, year: Optional[int] = None) -> Dict:
+                          top_n: int = 5, year: int | None = None) -> dict:
     """
     Compare Afghanistan's unit price to top competitors in a market.
     

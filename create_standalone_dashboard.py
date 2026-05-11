@@ -2,10 +2,10 @@
 import json
 
 # Read the JSON files
-with open('output/results_detailed.json', 'r') as f:
+with open('output/results_detailed.json') as f:
     trade_data = json.load(f)
 
-with open('indicator_definitions.json', 'r') as f:
+with open('indicator_definitions.json') as f:
     definitions = json.load(f)
 
 # HTML template with embedded data
