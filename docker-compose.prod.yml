@@ -1,0 +1,149 @@
+# =============================================================================
+# Production stack — single VM
+# =============================================================================
+# Differs from docker-compose.yml (the dev stack) in four ways that matter:
+#
+#   1. Nothing builds here. backend and frontend run the exact images CI built,
+#      tested and published for the commit being deployed. A rebuild on the VM
+#      produces a third image -- different base layer, different resolution
+#      date -- so what passed CI would never be what serves traffic.
+#   2. Postgres publishes NO port. In dev it's on 5432 for psql/DBeaver; here
+#      it is reachable only over the internal compose network. This is what
+#      lets the monthly ETL run on the VM instead of exposing the database to
+#      GitHub's runner IP ranges.
+#   3. Migrations are their own one-shot service that the API waits on, rather
+#      than being chained into the API's own start command.
+#   4. Caddy terminates TLS in front of everything and is the only thing bound
+#      to a public port.
+#
+# Deployed by deploy/vm/deploy.sh, which pins BACKEND_IMAGE/FRONTEND_IMAGE to
+# the commit SHA and never runs this file by hand.
+# =============================================================================
+
+services:
+  # ── Reverse proxy: TLS termination, routes /api to the API, everything
+  #    else to the Next.js server ─────────────────────────────────────────────
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: afg-market-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      # A domain you control (https://afg-market.example.org) gets a real,
+      # auto-renewing Let's Encrypt certificate. ":80" serves plain HTTP and is
+      # acceptable only for a throwaway demo -- Let's Encrypt cannot issue for
+      # a bare IP address.
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # MUST persist: these hold the issued certificates and the ACME account
+      # key. Losing them re-requests certs on every deploy, which hits Let's
+      # Encrypt's rate limits fast.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    networks:
+      - afg-market-network
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: afg-market-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-afg_market}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env — see .env.example}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Deliberately NO `ports:` mapping. The database is reachable only from
+    # other services on afg-market-network. To inspect it, SSH to the VM and
+    # use `docker compose -f docker-compose.prod.yml exec db psql -U postgres`.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - afg-market-network
+
+  # ── Schema migrations: one shot, per deploy, before anything serves ───────
+  #
+  # Runs from the backend image, so the migrations applied are the ones baked
+  # into the artifact CI tested — not whatever happens to be checked out on the
+  # VM. A non-zero exit fails the deploy: backend waits on
+  # service_completed_successfully, so nothing ever serves a half-migrated
+  # database.
+  migrate:
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image for the commit being deployed — deploy/vm/deploy.sh sets this}
+    container_name: afg-market-migrate
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env — see .env.example}
+    command: alembic upgrade head
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - afg-market-network
+
+  # ── FastAPI backend ───────────────────────────────────────────────────────
+  backend:
+    image: ${BACKEND_IMAGE:?set BACKEND_IMAGE to the image for the commit being deployed — deploy/vm/deploy.sh sets this}
+    container_name: afg-market-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env — see .env.example}
+      # Needed by the ETL, which runs from this same image (see etl.yml).
+      COMTRADE_API_KEY: ${COMTRADE_API_KEY:-}
+      # Caddy serves the API and UI from one origin, so this normally needs no
+      # cross-origin allowance at all. See backend/main.py.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    # `expose`, not `ports`: reachable from Caddy on the internal network only.
+    expose:
+      - "8000"
+    # Inherits the HEALTHCHECK baked into the image (Dockerfile.backend), which
+    # probes /health — a real SELECT 1, not just "the process is listening".
+    networks:
+      - afg-market-network
+
+  # ── Next.js frontend ──────────────────────────────────────────────────────
+  frontend:
+    image: ${FRONTEND_IMAGE:?set FRONTEND_IMAGE to the image for the commit being deployed — deploy/vm/deploy.sh sets this}
+    container_name: afg-market-frontend
+    restart: unless-stopped
+    environment:
+      # Server-side rewrite target for /api/* (frontend/next.config.ts). Used
+      # by Next's own server for SSR data fetching; browser traffic to /api is
+      # routed by Caddy straight to the backend and never passes through here.
+      BACKEND_URL: http://backend:8000
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "3000"
+    networks:
+      - afg-market-network
+
+networks:
+  afg-market-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

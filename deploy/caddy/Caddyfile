@@ -1,0 +1,68 @@
+# =============================================================================
+# AFG Market Diversification Tool — reverse proxy
+# =============================================================================
+# SITE_ADDRESS controls how this is served:
+#
+#   https://afg-market.example.org  <- a DOMAIN you control. Caddy obtains and
+#                                      renews a free Let's Encrypt certificate
+#                                      itself. The only option giving real,
+#                                      browser-trusted HTTPS.
+#
+#   :80                             <- plain HTTP, no certificate. Demo only.
+#
+# Let's Encrypt cannot issue certificates for a bare IP address, so with only
+# the VM's public IP you must either point a domain at it or accept :80.
+# =============================================================================
+
+{$SITE_ADDRESS::80} {
+	encode gzip zstd
+
+	header {
+		# Don't advertise the server software
+		-Server
+		# Block MIME-type sniffing
+		X-Content-Type-Options "nosniff"
+		# Block framing (clickjacking)
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Ignored by browsers over plain HTTP, so it is safe to always send
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Next.js inlines its hydration payload and Recharts sets style
+		# attributes, so 'unsafe-inline' is required for script and style here.
+		# Everything is served from this one origin, so connect-src 'self' is
+		# enough -- the browser calls /api on the same host.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	}
+
+	# API traffic goes straight to FastAPI, bypassing the Next.js server.
+	#
+	# next.config.ts also defines a /api/* rewrite, but that exists for `npm run
+	# dev` (where there is no proxy in front). Routing browser API calls through
+	# the Next server in production would add a pointless second hop and put
+	# Node in the path of every data request.
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# The deploy script and the CI post-deploy probe both read this. It must
+	# reach the BACKEND, not the Next server -- a health check answered by the
+	# frontend would report healthy with the API and database down.
+	handle /health {
+		reverse_proxy backend:8000
+	}
+
+	# FastAPI's interactive docs. Remove this block to keep the schema private;
+	# it is exposed here because the API serves public, read-only trade data and
+	# the docs are genuinely useful to the UNDP analysts using it.
+	handle /docs* {
+		reverse_proxy backend:8000
+	}
+	handle /openapi.json {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else: the Next.js server (SSR pages, static chunks, images).
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

@@ -1,16 +1,85 @@
-FROM python:3.12-slim
+# =============================================================================
+# Backend image — FastAPI API + the ETL pipeline (same image, both entrypoints)
+# =============================================================================
+# The ETL and the API share config.py, backend/country_names.py and the SQLAlchemy
+# models, so they ship as one image rather than two. Production runs the API as
+# the default CMD; the monthly ETL runs the same image with a different command
+# (see .github/workflows/etl.yml), which guarantees the pipeline writing to the
+# database is built from the same commit as the API reading from it.
+#
+# Multi-stage so the compiler toolchain needed to build psycopg2 never reaches
+# the runtime image.
+# =============================================================================
+
+# ── Stage 1: build wheels ────────────────────────────────────────────────────
+FROM python:3.12-slim AS builder
+
+# gcc and libpq-dev are needed to compile psycopg2's C extension. They are
+# ~250MB of toolchain that must not survive into the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Only the lockfile, so this layer is cached until dependencies actually change
+# — editing application code doesn't trigger a full reinstall.
+COPY requirements.txt .
+
+# Build every dependency to a wheel here; the runtime stage installs the
+# prebuilt wheels with no compiler present.
+RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+
+
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM python:3.12-slim AS runtime
+
+# libpq5 is the runtime PostgreSQL client library psycopg2 links against — the
+# runtime half of libpq-dev, without the headers or compiler.
+# curl is required by the container HEALTHCHECK below.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq5 curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
-# Install system dependencies for psycopg2
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq-dev gcc \
-    && rm -rf /var/lib/apt/lists/*
-
+COPY --from=builder /build/wheels /wheels
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# --no-index: install ONLY from the wheels built in stage 1. Without it a
+# missing wheel would silently fall back to PyPI at build time, producing an
+# image whose contents don't match the lockfile that was resolved.
+RUN pip install --no-index --find-links=/wheels -r requirements.txt \
+    && rm -rf /wheels
 
+# Application code last: it changes on every commit, so everything above stays
+# cached. .dockerignore controls what this actually copies — notably NOT .env,
+# .git, the virtualenv, or the test-only reference data.
 COPY . .
 
-# Run Alembic migrations then start the server
-CMD ["sh", "-c", "alembic upgrade head && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
+# Run as an unprivileged user. Nothing here writes to the image at runtime
+# (Postgres holds all state), so /app stays owned by root and read-only to the
+# app user — a container escape via the web process can't rewrite the code it
+# is running.
+RUN groupadd --system --gid 1001 appuser \
+    && useradd --system --uid 1001 --gid appuser --no-create-home appuser
+USER appuser
+
+EXPOSE 8000
+
+# Compose and the deploy script both gate on this: docker-compose.prod.yml
+# makes the frontend wait for `service_healthy`, so a backend that boots but
+# can't reach Postgres never gets traffic. /health checks the database, not
+# just the process — see backend/routers/meta.py.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:8000/health | grep -q '"status":"healthy"' || exit 1
+
+# Migrations are deliberately NOT run here. They run as their own one-shot
+# `migrate` service in docker-compose.prod.yml, which the API waits on. Running
+# `alembic upgrade head && uvicorn ...` inside the API's own CMD (as this image
+# used to) means every replica races to migrate on restart, and a failed
+# migration presents as an API crash-loop rather than a failed deploy step.
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

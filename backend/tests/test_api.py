@@ -8,6 +8,7 @@ Uses httpx TestClient with the FastAPI app and an in-memory SQLite DB
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -297,10 +298,37 @@ def seeded_db():
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 class TestHealth:
-    def test_health_returns_ok(self, client):
+    def test_health_returns_healthy(self, client):
         r = client.get("/health")
         assert r.status_code == 200
-        assert r.json()["status"] == "ok"
+        assert r.json() == {"status": "healthy", "database": "connected"}
+
+    def test_health_reports_unhealthy_when_db_is_down(self, client):
+        """
+        The deploy's rollback decision reads this endpoint, so "the database is
+        gone" must not present as a 200/healthy. Without this test the endpoint
+        could regress to a static literal and nothing would notice until a
+        broken deploy passed its health gate in production.
+        """
+        class BrokenSession:
+            def execute(self, *_args, **_kwargs):
+                raise OperationalError("SELECT 1", {}, Exception("connection refused"))
+
+        def broken_db():
+            yield BrokenSession()
+
+        app.dependency_overrides[get_db] = broken_db
+        try:
+            r = client.get("/health")
+        finally:
+            # Restore the module-level SQLite override rather than popping the
+            # key: every other test in this module depends on it still being
+            # installed, and pytest gives no ordering guarantee that this test
+            # runs last.
+            app.dependency_overrides[get_db] = override_get_db
+
+        assert r.status_code == 503
+        assert r.json() == {"status": "unhealthy", "database": "unreachable"}
 
 
 class TestProductsList:

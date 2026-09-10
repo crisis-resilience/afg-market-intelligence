@@ -229,3 +229,31 @@ class TestGeographyLookups:
         assert LANGUAGE_SIMILARITY["762"] > 0.3   # Tajikistan -- Tajik ~= Dari
         assert LANGUAGE_SIMILARITY["364"] > 0.3   # Iran -- Farsi ~= Dari
         assert LANGUAGE_SIMILARITY["842"] < LANGUAGE_SIMILARITY["364"]  # USA
+
+
+class TestProductNamesAreDeployable:
+    """
+    Guards assumptions that deploy/vm/run-etl.sh makes about product names.
+
+    That script receives the ETL's `--products` filter over SSH as a single
+    untrusted string, and defends itself with a character allowlist plus a
+    comma delimiter. Both assumptions live in a shell script that no other test
+    exercises, so a product added here with a comma or an exotic character
+    would break the scheduled production ETL and nothing would say why.
+    """
+
+    # Must stay in sync with the allowlist regex in deploy/vm/run-etl.sh.
+    # Comma is excluded deliberately: it is the argument delimiter.
+    ETL_SSH_SAFE_CHARS = re.compile(r"^[A-Za-z0-9 ()/&-]+$")
+
+    def test_product_names_are_safe_for_the_etl_ssh_command(self):
+        for name in PRODUCTS:
+            assert "," not in name, (
+                f"{name!r} contains a comma, which deploy/vm/run-etl.sh uses to "
+                f"separate product names — it would be split into two bogus filters"
+            )
+            assert self.ETL_SSH_SAFE_CHARS.match(name), (
+                f"{name!r} uses a character outside deploy/vm/run-etl.sh's "
+                f"allowlist — the scheduled ETL would reject it as unsafe input. "
+                f"Widen the regex in BOTH places if the new character is genuinely needed"
+            )

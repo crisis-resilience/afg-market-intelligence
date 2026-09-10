@@ -1,5 +1,18 @@
 name: Monthly ETL
 
+# Runs the pipeline ON THE PRODUCTION VM over SSH, rather than on a
+# GitHub-hosted runner.
+#
+# The previous version ran `python -m etl.run` on the runner itself against a
+# DATABASE_URL secret, which required the production Postgres to accept
+# connections from the public internet. GitHub's runner IP ranges are large and
+# change frequently, so allowlisting them is close to allowlisting everything —
+# a permanently open database for the sake of one scheduled job a month.
+#
+# Running on the VM means Postgres publishes no port at all (see
+# docker-compose.prod.yml), while the schedule, the logs and the failure
+# notifications stay here in GitHub.
+
 on:
   schedule:
     # First day of each month at 02:00 UTC
@@ -7,42 +20,116 @@ on:
   workflow_dispatch:
     inputs:
       products:
-        description: "Space-separated product names to run (leave blank for all)"
+        description: "Comma-separated product names (leave blank for all). e.g. Saffron,Dried Grapes (Raisins)"
         required: false
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   run-etl:
+    name: Run ETL on the VM
     runs-on: ubuntu-latest
 
+    # `issues: write` is needed only by the failure-notification step below.
+    # Declared at the job rather than the workflow level so it applies to the
+    # narrowest possible scope.
+    permissions:
+      contents: read
+      issues: write
+
+    # A full run is 38 products x 5 years across three APIs, with deliberate
+    # rate-limit delays. WITS alone takes 30-60s per market. Six hours is the
+    # ceiling before something is genuinely wrong, not the expected duration.
+    timeout-minutes: 360
+
+    # A second ETL starting while one is still running would have both writing
+    # the same rows. Queue rather than cancel: cancelling mid-run would leave
+    # the pipeline_runs table with a permanently "running" row.
+    concurrency:
+      group: etl-production
+      cancel-in-progress: false
+
+    environment:
+      name: production
+
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run ETL pipeline
+      - name: Run the pipeline over SSH
         env:
-          COMTRADE_API_KEY: ${{ secrets.COMTRADE_API_KEY }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # A DIFFERENT key from the deploy key, pinned server-side to
+          # deploy/vm/run-etl.sh by its own forced command. A key that can
+          # refresh data should not also be able to change which commit is in
+          # production. See docs/VM_DEPLOYMENT.md section 6.
+          SSH_KEY: ${{ secrets.VM_ETL_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ vars.VM_SSH_KNOWN_HOSTS }}
+          VM_HOST: ${{ vars.VM_HOST }}
+          VM_USER: ${{ vars.VM_USER }}
+          # Passed via env, never interpolated into the script body, so the
+          # shell never parses workflow-input text as code. run-etl.sh
+          # independently validates it against a character allowlist.
+          PRODUCTS: ${{ inputs.products }}
         run: |
-          if [ -n "${{ github.event.inputs.products }}" ]; then
-            python -m etl.run --products ${{ github.event.inputs.products }}
+          set -euo pipefail
+
+          for v in SSH_KEY KNOWN_HOSTS VM_HOST VM_USER; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set. See docs/VM_DEPLOYMENT.md section 6."
+              exit 1
+            fi
+          done
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/etl_key
+          chmod 600 ~/.ssh/etl_key ~/.ssh/known_hosts
+
+          if [ -n "$PRODUCTS" ]; then
+            echo "Running ETL for: $PRODUCTS"
           else
-            python -m etl.run
+            echo "Running full ETL (all products)"
           fi
 
-      - name: Verify data quality
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        # Internal checks only (fast, DB-only) -- fails the run on real
-        # structural problems (negative values, duplicate supplier codes,
-        # market_share_pct mismatches, out-of-range scores). Does not fail
-        # on source-data gaps like WGI's publishing lag or LPI's non-annual
-        # schedule -- those are logged but expected, see etl/verify.py.
-        run: python -m etl.verify
+          # ServerAliveInterval keeps the connection from being dropped by an
+          # idle-timeout during the long, quiet stretches of a full run — the
+          # pipeline can spend minutes inside a single WITS fetch without
+          # writing anything to stdout.
+          ssh -i ~/.ssh/etl_key \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              -o ServerAliveInterval=60 \
+              -o ServerAliveCountMax=10 \
+              "${VM_USER}@${VM_HOST}" "$PRODUCTS"
+
+      # The ETL is unattended and monthly, so a silent failure could go
+      # unnoticed until someone opens the UI and sees stale data. This makes the
+      # failure visible in the repo itself, not just in the Actions tab.
+      - name: Open an issue if the ETL failed
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Monthly ETL failed — ${new Date().toISOString().slice(0, 10)}`,
+              labels: ['etl', 'bug'],
+              body: [
+                'The scheduled ETL run failed on the production VM.',
+                '',
+                `**Run:** ${run}`,
+                `**Products:** ${context.payload.inputs?.products || 'all'}`,
+                '',
+                'Market data is now stale until this is resolved. To investigate:',
+                '',
+                '```bash',
+                'ssh <user>@<vm-host>   # an admin key, not the ETL key',
+                'cd ~/afg-market-intelligence',
+                'docker compose -f docker-compose.prod.yml logs --tail 200',
+                '```',
+                '',
+                'To retry once fixed, re-run this workflow from the Actions tab.',
+              ].join('\n'),
+            });
