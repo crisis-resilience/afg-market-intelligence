@@ -1,5 +1,7 @@
 """FastAPI application entry point."""
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,9 +13,26 @@ app = FastAPI(
     version="2.0.0",
 )
 
+# Comma-separated list of allowed browser origins, e.g.
+#   CORS_ORIGINS=https://afg-market.example.org
+# Defaults to the local dev frontend rather than "*": in the deployed setup
+# Caddy serves the API and the UI from one origin (see deploy/caddy/Caddyfile),
+# so production needs no cross-origin allowance at all and the default being
+# restrictive means forgetting to set this can't silently expose the API to
+# every origin on the internet.
+#
+# "*" is still accepted explicitly for a genuinely public, unauthenticated
+# read-only API -- which this currently is -- but it has to be a deliberate
+# choice recorded in the environment, not the built-in default.
+_cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten to specific frontend origin in production
+    allow_origins=_cors_origins,
     allow_methods=["GET"],
     allow_headers=["*"],
 )

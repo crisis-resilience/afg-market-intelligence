@@ -1,22 +1,49 @@
-# Data pipeline
-world_trade_data>=0.1.0
-comtradeapicall>=1.0.0
-pandas>=2.0.0
-numpy>=1.24.0
-python-dotenv>=1.0.0
-certifi>=2024.0.0
-tenacity>=8.2.0
-
-# Backend / API
-fastapi>=0.111.0
-uvicorn[standard]>=0.29.0
-sqlalchemy>=2.0.0
-psycopg2-binary>=2.9.0
-alembic>=1.13.0
-pydantic>=2.0.0
-pydantic-settings>=2.0.0
-
-# Testing / dev
-pytest>=8.0.0
-httpx>=0.27.0
-ruff>=0.4.0
+#
+# GENERATED FILE — do not edit by hand.
+#
+# Compiled from requirements.in. Regenerate with:
+#     pip-compile requirements.in -o requirements.txt
+#
+# Every transitive dependency is pinned to an exact version so that the image
+# CI tests and the image production runs contain byte-identical packages. CI's
+# `deps` job recompiles this on a networked runner and fails if the result
+# differs from what is committed here.
+#
+alembic==1.18.5
+annotated-doc==0.0.4
+annotated-types==0.7.0
+anyio==4.14.1
+certifi==2025.8.3
+charset-normalizer==3.4.3
+click==8.4.2
+comtradeapicall==1.3.1
+fastapi==0.139.0
+greenlet==3.5.3
+h11==0.16.0
+httptools==0.8.0
+idna==3.10
+mako==1.3.12
+markupsafe==3.0.3
+numpy==2.4.4
+pandas==3.0.2
+psycopg2-binary==2.9.12
+pydantic==2.13.4
+pydantic-core==2.46.4
+pydantic-settings==2.14.2
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+pyyaml==6.0.3
+requests==2.32.5
+six==1.17.0
+sqlalchemy==2.0.51
+starlette==1.3.1
+tenacity==9.1.4
+typing-extensions==4.15.0
+typing-inspection==0.4.2
+urllib3==2.5.0
+uvicorn==0.51.0
+uvloop==0.22.1
+watchfiles==1.2.0
+websockets==16.0
+world-trade-data==0.1.1
+xmltodict==1.0.4

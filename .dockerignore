@@ -1,0 +1,103 @@
+# =============================================================================
+# Docker build context exclusions (repo root — the backend image's context)
+# =============================================================================
+# Dockerfile.backend builds with `context: .` and copies the repo in, so
+# ANYTHING not excluded here is baked into an image layer and readable by
+# anyone who can pull or `docker save` that image. Secrets must never be in
+# this context.
+#
+# Before this file existed, `.env` (holding COMTRADE_API_KEY) was copied into
+# every backend image, along with .git — from which the full commit history,
+# including any secret ever committed, is recoverable.
+# =============================================================================
+
+# --- secrets: never copy into an image ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets.json
+config/secrets.json
+id_rsa*
+
+# --- version control & CI (a .git copy makes full history recoverable) ---
+.git
+.gitignore
+.github
+.dockerignore
+
+# --- virtualenvs: the image installs its own, and these carry host-specific
+#     absolute paths and compiled binaries for the wrong platform ---
+mrkt_intel_venv
+venv
+.venv
+env
+ENV
+
+# --- Python build/cache artifacts, regenerated inside the image ---
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.ruff_cache
+*.egg-info
+dist
+build
+
+# --- the frontend has its own build context (frontend/Dockerfile.frontend);
+#     none of it is needed by, or belongs in, the backend image ---
+frontend
+
+# --- tests and their fixtures: the production image runs neither. CI tests
+#     from the checkout, not from the image (see the test-and-lint job). ---
+tests
+backend/tests
+etl/tests
+requirements-dev.txt
+requirements-dev.in
+requirements.in
+
+# --- large reference material the RUNTIME never reads (~4.8MB).
+#
+#     Keep this list in sync with what config.py actually loads at import
+#     time. Right now that is exactly two small CSVs, and excluding anything
+#     else from reference/ is safe:
+#       KEPT     distance_from_kabul_km.csv   -> DISTANCE_FROM_KABUL_KM
+#       KEPT     language_similarity_afg.csv  -> LANGUAGE_SIMILARITY
+#       excluded hs_h5.json / hs_h6.json / hs2017_hs2022_correlation.csv
+#                -- read only by tests/test_config.py's HS validation
+#       excluded dicl.csv
+#                -- read only by reference/build_language_reference.py, the
+#                   offline regeneration script
+#     If a runtime code path ever starts reading one of these, remove its
+#     line here or config.py will raise FileNotFoundError on import.
+reference/hs_h5.json
+reference/hs_h6.json
+reference/hs2017_hs2022_correlation.csv
+reference/dicl.csv
+reference/build_*.py
+
+# --- human documentation, including a 2.2MB third-party PDF ---
+docs
+*.pdf
+*.xlsx
+
+# --- local analysis scratch work, never part of the application ---
+scratch
+output
+
+# --- logs & local tooling noise ---
+*.log
+etl_run.log
+etl/.cache
+.cursor
+.claude
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

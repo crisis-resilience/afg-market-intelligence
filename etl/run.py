@@ -26,13 +26,29 @@ from backend.country_names import resolve_country_name
 from config import NUMERIC_TO_ISO3, PRODUCTS, TOP_N_MARKETS, YEARS
 from etl import fetch, load, transform
 
+# stdout is always a handler; the log FILE is best-effort.
+#
+# In the container the working directory (/app) is root-owned and the process
+# runs as an unprivileged user, so opening etl_run.log there raises
+# PermissionError -- and because this runs at import time, that killed the
+# whole pipeline before main() was ever reached. Locally the file is genuinely
+# useful (it's how the World Bank timeout bug was diagnosed), so it's kept
+# where it can be written rather than dropped.
+#
+# ETL_LOG_FILE overrides the path; set it to a bind-mounted directory to keep
+# file logs in production. Either way, stdout carries everything, which is what
+# `docker compose logs` and the GitHub Actions ETL job actually read.
+_log_handlers: list[logging.Handler] = [logging.StreamHandler()]
+_log_file = os.getenv("ETL_LOG_FILE", "etl_run.log")
+try:
+    _log_handlers.append(logging.FileHandler(_log_file))
+except OSError as exc:  # read-only or non-writable location
+    print(f"WARNING: file logging disabled ({_log_file}: {exc}); logging to stdout only")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("etl_run.log"),
-    ],
+    handlers=_log_handlers,
 )
 logger = logging.getLogger(__name__)
 

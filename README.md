@@ -9,14 +9,17 @@ A user selects a product (by HS code or name), and the tool returns a ranked lis
 | Dimension | Weight | Source |
 |-----------|--------|--------|
 | Market size (global imports of this product) | 20% | UN Comtrade |
-| Market growth (CAGR of Afghan exports to this market) | 18% | UN Comtrade |
+| Market growth (CAGR of global imports in this market) | 18% | UN Comtrade |
 | Market quality (governance, logistics) | 13% | World Bank WDI/WGI |
 | Price competitiveness | 13% | UN Comtrade |
 | Tariff rate on Afghan goods | 12% | WITS (World Bank) |
 | Existing Afghan foothold | 10% | UN Comtrade (mirror stats) |
-| Geographic proximity to Kabul | 10% | Static lookup |
-| Language / cultural similarity | 4% | Static lookup |
-| FTA / preferential trade access | 2% | Static lookup |
+| Geographic proximity to Kabul | 10% | CEPII GeoDist |
+| Language / cultural similarity | 4% | DICL |
+
+**FTA / preferential trade access is computed and stored but deliberately not weighted.** WITS's Afghanistan-specific (`partner=004`) tariff schedule returns "NoRecordsFound" for effectively every reporter, so `has_fta` is false for ~100% of rows — a weight that could never move the score. Its former 2% share was folded into Tariff (10% → 12%). See the comment on `OPPORTUNITY_SCORE_WEIGHTS` in `config.py`.
+
+A dimension whose underlying data is genuinely missing scores `NULL` rather than defaulting to a neutral 50; it is dropped from the composite and the remaining weights are renormalised to sum to 1.0.
 
 The tool also surfaces **practical next steps** per market (documentation, tariff claims, buyer contacts, trade fairs) as its key differentiator over existing tools.
 
@@ -33,10 +36,10 @@ UN Comtrade API + World Bank API
         ↓
   backend/  (FastAPI — serves ranked markets + market profiles)
         ↓
-  frontend/  (Next.js — discovery wizard UI)  ← planned
+  frontend/  (Next.js — discovery wizard UI)
 ```
 
-**Stack:** Python · FastAPI · PostgreSQL · Alembic · Docker Compose · Next.js (planned) · GitHub Actions
+**Stack:** Python · FastAPI · PostgreSQL · Alembic · Next.js · Docker Compose · Caddy · GitHub Actions · GHCR
 
 ---
 
@@ -65,7 +68,7 @@ This starts PostgreSQL and the FastAPI backend. On first start, the backend cont
 ### 3. Run the ETL pipeline
 
 ```bash
-# Full run — all 34 products + World Bank indicators
+# Full run — all 38 products + World Bank indicators
 docker-compose exec backend python -m etl.run
 
 # Specific products only
@@ -102,14 +105,39 @@ Interactive API docs: `http://localhost:8000/docs`
 
 ## Development
 
-### Run tests (no Docker needed)
+### Install dependencies
+
+`requirements.txt` is a **generated lockfile** — every transitive dependency is pinned so that the image CI tests and the image production runs contain identical packages. Edit `requirements.in` (runtime) or `requirements-dev.in` (test tooling), never the `.txt` files:
 
 ```bash
-pip install -r requirements.txt
-pytest backend/tests/ -v
+pip install -r requirements.txt -r requirements-dev.txt
+
+# After changing a .in file:
+pip install pip-tools
+pip-compile --strip-extras requirements.in     -o requirements.txt
+pip-compile --strip-extras requirements-dev.in -o requirements-dev.txt
 ```
 
-Tests use an in-memory SQLite DB — no external dependencies.
+CI recompiles both and fails if the committed lockfiles have drifted.
+
+### Run tests
+
+```bash
+pytest              # 253 tests; the SQLite/pure-Python ones need nothing
+```
+
+Most tests use an in-memory SQLite DB or plain Python objects. Three suites
+(`etl/tests/test_load.py`, `test_pipeline_integration.py`, `test_verify.py`)
+exercise the real PostgreSQL upsert SQL and skip automatically without a
+database. To run them too:
+
+```bash
+docker compose up -d db_test
+export TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/afg_market_test
+pytest
+```
+
+CI always runs them, against a Postgres service container, and fails if they skip.
 
 ### Lint
 
@@ -133,7 +161,7 @@ alembic revision --autogenerate -m "description"
 
 ```
 afg-market-intelligence/
-├── config.py                    # Products (38, 37 unique HS codes), score weights, country lookups
+├── config.py                    # Products (38, 39 unique HS codes), score weights, reference lookups
 ├── requirements.txt
 ├── pyproject.toml               # Ruff + pytest config
 ├── alembic.ini
@@ -149,11 +177,7 @@ afg-market-intelligence/
 │   └── verify.py                # DB sanity checks + optional live spot-checks
 │
 ├── migrations/
-│   └── versions/
-│       ├── 0001_initial_schema.py
-│       ├── 0002_market_context_and_scores.py
-│       ├── 0003_tariff_rates.py
-│       └── 0004_tariff_year.py
+│   └── versions/               # 0001–0011; see HANDOVER.md §3 for what each adds
 │
 ├── backend/
 │   ├── main.py                  # FastAPI app
@@ -168,23 +192,35 @@ afg-market-intelligence/
 │   ├── services/
 │   │   ├── discovery.py         # Ranked-market queries + next-step logic
 │   │   └── products.py          # Product/market indicator queries
-│   └── tests/                   # 47 tests total (SQLite, no Docker)
-│       ├── test_api.py          # 27 contract tests
-│       ├── test_country_names.py
-│       └── test_next_steps.py
+│   └── tests/                   # API contract tests (SQLite, no Docker)
 │
-├── frontend/                    # Next.js app (discovery wizard UI, product grid, market profile)
+├── tests/                       # config/HS-code validation + Comtrade fetch layer
+├── etl/tests/                   # transform, scoring, load, verify, integration
+│
+├── frontend/                    # Next.js app (product grid, discovery, market profile)
+│
+├── reference/                   # Checked-in source data (CEPII, DICL, HS nomenclature)
+│                                #   + the scripts that regenerate the extracts
+│
+├── deploy/                      # Production deployment (see docs/VM_DEPLOYMENT.md)
+│   ├── caddy/Caddyfile          # TLS termination + routing
+│   └── vm/
+│       ├── deploy.sh            # Pinned as the CI deploy key's forced command
+│       └── run-etl.sh           # Pinned as the ETL key's forced command
+│
+├── docker-compose.yml           # Local dev stack
+├── docker-compose.prod.yml      # Production stack (prebuilt images, no exposed DB)
 │
 ├── indicator_definitions.json   # Metric definitions for UI tooltips
 │
 └── .github/workflows/
-    ├── ci.yml                   # Lint + tests on push to main / claude/**
-    └── etl.yml                  # Monthly ETL cron (1st of month, 02:00 UTC)
+    ├── ci-cd.yml                # Test → build+publish images → integration → deploy
+    └── etl.yml                  # Monthly ETL on the VM, over SSH (1st, 02:00 UTC)
 ```
 
 ---
 
-## Products covered (38 products, 37 unique HS codes)
+## Products covered (38 products, 39 unique HS codes)
 
 | Category | Products |
 |----------|----------|
@@ -240,33 +276,85 @@ WITS tariff data typically lags 2–3 years behind trade data, so the ETL walks 
 
 A discarded rate makes `score_tariff = NULL`, excluded from `opportunity_score` with the remaining weights renormalised — changed 2026-09-02 from a neutral-50 default. Deliberately not a guessed 0 either: `score_afg_foothold` already carries the "no Afghan trade history" penalty as a confirmed fact for its own dimension; not knowing the tariff is a genuinely different situation (we don't know what applies, not that it's bad), so excluding it avoids asserting either a false-favorable or false-punitive number and avoids double-counting the same underlying fact across two dimensions.
 
-### Static lookups
-- **Distance from Kabul** — approximate straight-line km for ~60 trading partners
-- **Language similarity** — scored 0–1 based on Dari/Pashto overlap with trade-communication languages
-- **FTA status** — Afghanistan's memberships: SAPTA (South Asia), ECO (Central/West Asia), EU/UK GSP+
+### Reference data
+
+Built at import time in `config.py` from checked-in extracts in `reference/` — these were hand-typed dictionaries until 2026-08 and are now real published datasets:
+
+- **Distance from Kabul** — great-circle capital-to-capital km, from CEPII's GeoDist (Mayer & Zignago, 2011). Regenerate with `reference/build_distance_reference.py`.
+- **Language similarity** — an 0.8/0.2 blend of DICL's `lp` (linguistic proximity) and `cnl` (common native language) indices against Dari/Pashto (Gurevich, Herman, Toubal & Yotov, 2025). Regenerate with `reference/build_language_reference.py`.
+- **FTA status** — no longer a lookup at all. Derived live from WITS's own AHS/MFN partner-segment indicator (`tariff_indicator == 'AHS'`), reusing the tariff fetch.
+
+HS codes are validated against Comtrade's own HS2017/HS2022 nomenclature and the WCO/UNSD correlation table — `tests/test_config.py` fails if a product's code isn't a real leaf code covering every year in `YEARS`.
 
 ### Opportunity score
-Each dimension is normalised to 0–100 before weighting. Score thresholds are configurable in `config.py` (`OPPORTUNITY_SCORE_WEIGHTS`).
+
+Each dimension is normalised to 0–100, then weighted per `config.py` → `OPPORTUNITY_SCORE_WEIGHTS`.
+
+Normalisation follows the OECD (2008) *Handbook on Constructing Composite Indicators*, Step 5: log-transform first where the raw quantity is positively skewed (§5.1), then Min-Max (§5.3) against a **fixed external reference bound** (§5.4) rather than the observed sample min/max. The bounds are deliberately not recomputed per ETL run — a data-derived bound would make `opportunity_score` incomparable month to month, which is exactly the instability the Handbook warns about.
+
+| Dimension | Scoring |
+|-----------|---------|
+| Market size | `100 × ln(size / F) / ln(max / F)`, F = `MARKET_SIZE_LOG_FLOOR_USD` (500) |
+| Market growth | Min-Max on `[-W, +W]`, W = `CAGR_SCORE_BAND_PCT` (75). 0% CAGR → 50 |
+| Market quality | Mean of available sub-scores: LPI (1–5 → 0–100), regulatory quality and political stability (already 0–100 on the WGI `.SC` scale) |
+| Price competitiveness | Categorical: Substantially Below Market → 100, Below → 75, Near → 50, Above → 25 |
+| Tariff | `100 × (1 − ln1p(rate) / ln1p(ceiling))`, ceiling = `TARIFF_SCORE_LOG_CEILING_PCT` (35) |
+| Afghan foothold | `100 × ln1p(value) / ln1p(product max)`; a historical-only export scores at 0.7×, capped at 90 |
+| Distance | `100 × (1 − ln1p(km) / ln1p(20015))` — gravity-model treatment: cost scales with the *ratio* of distance |
+| Language | `LANGUAGE_SIMILARITY × 100` |
+
+Each constant's derivation against live data is documented inline in `config.py`, including what was rejected and why.
+
+**Missing data is not guessed.** Market size, growth, quality, tariff and distance return `NULL` when their underlying data is genuinely absent. A `NULL` dimension is dropped from the composite and the remaining weights renormalised to sum to 1.0, rather than defaulting to a neutral 50 — asserting "average" with zero information would be a fabricated input, and for tariff specifically would double-count what `score_afg_foothold` already records.
 
 ---
 
 ## Environment variables
+
+Full annotated list in `.env.example`.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `COMTRADE_API_KEY` | Yes | UN Comtrade subscription key |
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `POSTGRES_PASSWORD` | Docker only | Password for the `postgres` user |
+| `SITE_ADDRESS` | Production | Caddy's site address — a domain gets automatic HTTPS |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins. Defaults to `http://localhost:3000`, not `*` |
+| `ETL_LOG_FILE` | No | Where the ETL writes its log file; falls back to stdout only if unwritable |
+| `TEST_DATABASE_URL` | No | Enables the Postgres-backed test suites |
+
+---
+
+## CI/CD and deployment
+
+**`.github/workflows/ci-cd.yml`** runs on every push and PR:
+
+| Job | What it does |
+|-----|--------------|
+| Test & Lint | `ruff` + the full `pytest` suite, including the Postgres-backed ones — and fails if those *skip* |
+| Verify dependency locks | Recompiles `requirements*.txt` with `pip-compile` and fails on drift |
+| Lint & Build (frontend) | `eslint` + `next build` |
+| Build & publish images | Builds both images; publishes to GHCR tagged `sha-<commit>` on non-PR builds. Asserts no `.env`, `.git` or secret material is in any layer |
+| Integration (Docker) | Runs the **real images** against real Postgres: migrations forward, twice (idempotency), and in reverse; `/health` in both its healthy and database-down states; a real `/api/products` query; `docker-compose.prod.yml` validation |
+| Deploy to VM | On pushes to `main` only — SSHes in and deploys the tested commit |
+
+**Deployment is to a single VM**, running the images CI built rather than rebuilding on the box. The deploy key is pinned server-side to `deploy/vm/deploy.sh` by an SSH forced command and accepts nothing but a commit SHA that is already an ancestor of `origin/main` — a leaked key can't open a shell or deploy arbitrary code. `deploy.sh` health-checks after bringing the stack up and **rolls back automatically** if the check fails.
+
+The monthly ETL runs **on the VM**, triggered over SSH by its own separate key, so PostgreSQL never publishes a port.
+
+**Setup guide: [`docs/VM_DEPLOYMENT.md`](docs/VM_DEPLOYMENT.md).**
 
 ---
 
 ## Roadmap
 
 - [x] ETL pipeline (Comtrade + World Bank + WITS tariffs)
-- [x] Opportunity scoring model (9 dimensions, configurable weights)
+- [x] Opportunity scoring model (8 weighted dimensions, configurable weights)
 - [x] FastAPI backend with discovery + products endpoints
 - [x] Market-entry next steps per market (incl. tariff-aware guidance)
-- [ ] Next.js frontend — discovery wizard UI
+- [x] Next.js frontend — product grid, discovery, market profile
+- [x] CI/CD pipeline with automated VM deployment and rollback
+- [ ] Database backups (nothing in this repo does this yet — see `docs/VM_DEPLOYMENT.md` §10)
 - [ ] Natural language → HS code classifier ("I sell dried figs")
 - [ ] Buyer contact directory integration
 - [ ] Simplified "business owner" view (vs. analyst view)

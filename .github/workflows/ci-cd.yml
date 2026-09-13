@@ -1,0 +1,609 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+# Least privilege by default; only the job that publishes widens this.
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE_NAME: ${{ github.repository }}/backend
+  FRONTEND_IMAGE_NAME: ${{ github.repository }}/frontend
+
+jobs:
+  # ===========================================================================
+  # Job 1: Python lint + tests (fast feedback)
+  # ===========================================================================
+  test-and-lint:
+    name: Test & Lint (Python)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: afg_market_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      # Install from the LOCKFILES, not the .in files — CI must exercise the
+      # same pinned set the production image contains.
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check . --output-format=github
+
+      # TEST_DATABASE_URL turns on the Postgres-backed suites (etl/tests/
+      # test_load.py, test_pipeline_integration.py, test_verify.py). Without it
+      # they skip silently — which is fine locally, but in CI a skipped suite
+      # is a suite that isn't protecting anything.
+      - name: Run tests
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/afg_market_test
+        run: pytest -v
+
+      # A skip in CI means the Postgres suites never ran — most likely because
+      # the service container or TEST_DATABASE_URL broke, which is exactly the
+      # kind of silent coverage loss that goes unnoticed for months.
+      - name: Assert the Postgres-backed suites actually ran
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/afg_market_test
+        run: |
+          set -euo pipefail
+          pytest etl/tests/test_load.py etl/tests/test_pipeline_integration.py \
+                 etl/tests/test_verify.py -q --no-header 2>&1 | tee /tmp/pg-tests.txt
+          if grep -qE '[0-9]+ skipped' /tmp/pg-tests.txt; then
+            echo "::error::Postgres-backed tests were skipped — TEST_DATABASE_URL or the service container is not working"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # Job 2: Dependency lockfiles are in sync with their sources
+  # ===========================================================================
+  # requirements.txt is what the production image installs. If it drifts from
+  # requirements.in, the pin stops meaning anything — someone edits the .in,
+  # forgets to recompile, and prod silently keeps the old resolution.
+  deps:
+    name: Verify dependency lockfiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install pip-tools
+        run: pip install pip-tools
+
+      # --quiet keeps the diff readable. The compile is deterministic given the
+      # same .in and Python version, so any difference is a real drift.
+      - name: Recompile and diff
+        run: |
+          set -euo pipefail
+          cp requirements.txt /tmp/requirements.txt.committed
+          cp requirements-dev.txt /tmp/requirements-dev.txt.committed
+
+          pip-compile --quiet --strip-extras requirements.in     -o requirements.txt
+          pip-compile --quiet --strip-extras requirements-dev.in -o requirements-dev.txt
+
+          # Compare package pins only: pip-compile writes a header naming the
+          # command that produced the file, and comments recording which
+          # package pulled each transitive dep. Neither affects what gets
+          # installed, and both are noisy across pip-tools versions.
+          normalise() { grep -vE '^\s*#|^\s*$' "$1" | sed 's/\s*#.*//' | sort; }
+
+          failed=0
+          for f in requirements.txt requirements-dev.txt; do
+            if ! diff -u <(normalise "/tmp/${f}.committed") <(normalise "$f"); then
+              echo "::error::$f is out of date. Run: pip-compile --strip-extras ${f%.txt}.in -o $f"
+              failed=1
+            fi
+          done
+          exit $failed
+
+  # ===========================================================================
+  # Job 3: Frontend lint + build
+  # ===========================================================================
+  frontend:
+    name: Lint & Build (frontend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (includes TypeScript check)
+        run: npm run build
+
+  # ===========================================================================
+  # Job 4: Build both images, and publish them on non-PR builds
+  # ===========================================================================
+  build:
+    name: Build & publish images
+    runs-on: ubuntu-latest
+    needs: [test-and-lint, deps, frontend]
+    timeout-minutes: 25
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Only needed to publish. Pull requests never publish, and a fork PR's
+      # token is read-only, so logging in there would fail for no benefit.
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract backend metadata
+        id: meta-backend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}
+          # `type=sha,format=long` produces sha-<full 40-char commit>, and that
+          # is the tag production runs: deploy/vm/deploy.sh is handed a commit
+          # SHA and derives both image references from it directly, with no
+          # registry lookup and nothing to fall back to. The short
+          # branch-prefixed tag cannot serve that purpose — it is abbreviated,
+          # and its prefix changes with the branch name.
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+
+      - name: Extract frontend metadata
+        id: meta-frontend
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=long
+
+      # Always build, so every PR is compiled — but into the local daemon only.
+      # Publishing a PR's image would turn untrusted contributor code into a
+      # durable, pullable artifact in the registry.
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          load: true
+          tags: afg-market-backend:ci
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.frontend
+          load: true
+          tags: afg-market-frontend:ci
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      # The `.env` this asserts against does not exist in a clean checkout —
+      # it's created here precisely so the check is meaningful. Without a
+      # .dockerignore, `COPY . .` would pull it into the image, and this is the
+      # only thing standing between a developer's local .env and a published
+      # artifact anyone with registry read access can `docker save`.
+      - name: Assert no secrets were baked into the backend image
+        run: |
+          set -euo pipefail
+          echo "COMTRADE_API_KEY=canary-must-not-be-in-image" > .env
+
+          docker build -f Dockerfile.backend -t afg-market-backend:secrets-check . >/dev/null
+
+          if docker run --rm --entrypoint sh afg-market-backend:secrets-check \
+               -c 'ls -a /app/.env /app/.git 2>/dev/null' | grep -q .; then
+            echo "::error::.env or .git is present inside the backend image — check .dockerignore"
+            exit 1
+          fi
+
+          # Belt and braces: scan every layer for the canary value itself, in
+          # case the file is copied to a path other than /app.
+          if docker save afg-market-backend:secrets-check \
+               | tar -xO 2>/dev/null \
+               | grep -qa 'canary-must-not-be-in-image'; then
+            echo "::error::the canary secret was found inside an image layer — check .dockerignore"
+            exit 1
+          fi
+
+          rm -f .env
+          echo "✓ no .env, no .git, no secret material in the image"
+
+      # Handed to the integration job as artifacts so it tests THIS commit's
+      # images, with no registry round-trip and nothing to fall back to.
+      - name: Export images for the integration job
+        run: |
+          docker save afg-market-backend:ci  -o /tmp/backend-image.tar
+          docker save afg-market-frontend:ci -o /tmp/frontend-image.tar
+
+      - name: Upload image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: images
+          path: |
+            /tmp/backend-image.tar
+            /tmp/frontend-image.tar
+          retention-days: 1
+
+      - name: Publish backend image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: true
+          tags: ${{ steps.meta-backend.outputs.tags }}
+          labels: ${{ steps.meta-backend.outputs.labels }}
+          cache-from: type=gha,scope=backend
+
+      - name: Publish frontend image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile.frontend
+          push: true
+          tags: ${{ steps.meta-frontend.outputs.tags }}
+          labels: ${{ steps.meta-frontend.outputs.labels }}
+          cache-from: type=gha,scope=frontend
+
+  # ===========================================================================
+  # Job 5: Run the real stack, the way production runs it
+  # ===========================================================================
+  # This is the job that catches what unit tests structurally cannot: a broken
+  # migration chain, a missing runtime library in the slim image, a service that
+  # can't reach Postgres, a health endpoint that lies.
+  integration:
+    name: Integration (Docker)
+    runs-on: ubuntu-latest
+    needs: build
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: afg_market_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The images come from the build job as artifacts, NOT from the registry.
+      # Pulling by tag with a fallback to :latest would health-check the CURRENT
+      # PRODUCTION image and report success for code that was never in the
+      # commit under test. There is deliberately no fallback: a missing artifact
+      # fails the job, because a green tick must mean this commit was tested.
+      - name: Download images built from this commit
+        uses: actions/download-artifact@v4
+        with:
+          name: images
+          path: /tmp
+
+      - name: Load images
+        run: |
+          docker load -i /tmp/backend-image.tar
+          docker load -i /tmp/frontend-image.tar
+          docker image inspect afg-market-backend:ci  > /dev/null
+          docker image inspect afg-market-frontend:ci > /dev/null
+          echo "Loaded images built from ${{ github.sha }}"
+
+      # The migration step the deploy runs, run the way the deploy runs it: the
+      # same command, from the same image, against a real database.
+      - name: Apply migrations exactly as the deploy does
+        run: |
+          set -euo pipefail
+          in_image() {
+            docker run --rm \
+              --add-host=host.docker.internal:host-gateway \
+              -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+              afg-market-backend:ci "$@"
+          }
+
+          in_image alembic upgrade head
+
+          # Production runs `alembic upgrade head` on every deploy, most of
+          # which change no schema at all. Running it twice here proves the
+          # second run is a no-op and not an error — otherwise the first deploy
+          # after a migration would be the one that fails.
+          in_image alembic upgrade head
+
+          # A green tick must mean the database is actually at head. `alembic
+          # current` prints nothing at all when no version is stamped, which
+          # would otherwise pass unnoticed.
+          in_image alembic current | tee /tmp/alembic-current.txt
+          grep -q '(head)' /tmp/alembic-current.txt \
+            || { echo "::error::database is not at head after upgrade"; exit 1; }
+
+      # 11 migrations with no downgrade path is a one-way door: a bad deploy
+      # can only be fixed forward. Proving the chain reverses gives the rollback
+      # in deploy.sh something to actually roll back to.
+      - name: Verify migrations are reversible
+        run: |
+          set -euo pipefail
+          in_image() {
+            docker run --rm \
+              --add-host=host.docker.internal:host-gateway \
+              -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+              afg-market-backend:ci "$@"
+          }
+          in_image alembic downgrade -1
+          in_image alembic upgrade head
+          echo "✓ the most recent migration reverses and reapplies cleanly"
+
+      - name: Health check the backend image
+        run: |
+          set -euo pipefail
+
+          CONTAINER_ID=$(docker run -d \
+            --add-host=host.docker.internal:host-gateway \
+            -p 8001:8000 \
+            -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+            afg-market-backend:ci)
+
+          fail_with_logs() {
+            echo "::error::$1"
+            echo "=== container logs ==="
+            docker logs "$CONTAINER_ID" || true
+            docker rm -f "$CONTAINER_ID" >/dev/null 2>&1 || true
+            exit 1
+          }
+
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8001/health >/dev/null 2>&1; then break; fi
+            echo "  waiting for /health ($i/30)"
+            sleep 2
+          done
+
+          RESPONSE=$(curl -fsS --max-time 10 http://localhost:8001/health) \
+            || fail_with_logs "/health never became reachable"
+          echo "Health response: $RESPONSE"
+
+          # The exact string deploy/vm/deploy.sh greps for. If this contract
+          # changes, the deploy's rollback logic breaks silently — so assert it
+          # here rather than merely checking for HTTP 200.
+          echo "$RESPONSE" | grep -q '"status":"healthy"' \
+            || fail_with_logs "/health did not report healthy"
+          echo "$RESPONSE" | grep -q '"database":"connected"' \
+            || fail_with_logs "/health did not report the database as connected"
+
+          # A real query against real tables. /health only runs SELECT 1, so it
+          # would report healthy against a database with no schema at all —
+          # exactly the gap that lets a broken deploy pass its gate.
+          API_STATUS=$(curl -s -o /tmp/products.json -w '%{http_code}' \
+            --max-time 10 http://localhost:8001/api/products)
+          [ "$API_STATUS" = "200" ] \
+            || fail_with_logs "GET /api/products returned $API_STATUS, expected 200"
+          echo "✓ /api/products queries the migrated schema successfully"
+
+          docker rm -f "$CONTAINER_ID" >/dev/null
+
+      # The health endpoint's failure path is what decides whether a bad deploy
+      # rolls back. If it reports healthy with no database, deploy.sh would
+      # accept a broken stack — so prove it fails when it should.
+      - name: Verify the health check fails when the database is gone
+        run: |
+          set -euo pipefail
+          CONTAINER_ID=$(docker run -d -p 8002:8000 \
+            -e DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:9999/nope" \
+            afg-market-backend:ci)
+
+          sleep 8
+          CODE=$(curl -s -o /tmp/unhealthy.json -w '%{http_code}' --max-time 10 \
+            http://localhost:8002/health || echo 000)
+          BODY=$(cat /tmp/unhealthy.json 2>/dev/null || echo '')
+          docker rm -f "$CONTAINER_ID" >/dev/null
+
+          echo "Status: $CODE  Body: $BODY"
+          if [ "$CODE" = "200" ] && echo "$BODY" | grep -q '"status":"healthy"'; then
+            echo "::error::/health reported healthy with an unreachable database — the deploy gate is useless"
+            exit 1
+          fi
+          echo "✓ /health correctly refuses to report healthy without a database"
+
+      - name: Smoke-test the frontend image
+        run: |
+          set -euo pipefail
+          CONTAINER_ID=$(docker run -d -p 3001:3000 \
+            -e BACKEND_URL="http://127.0.0.1:8001" \
+            afg-market-frontend:ci)
+
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://localhost:3001/ 2>/dev/null; then break; fi
+            echo "  waiting for the Next server ($i/30)"
+            sleep 2
+          done
+
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:3001/ || echo 000)
+          if [ "$CODE" != "200" ]; then
+            echo "::error::the frontend image did not serve / (HTTP $CODE)"
+            docker logs "$CONTAINER_ID" || true
+            docker rm -f "$CONTAINER_ID" >/dev/null 2>&1 || true
+            exit 1
+          fi
+          docker rm -f "$CONTAINER_ID" >/dev/null
+          echo "✓ the frontend image boots and serves"
+
+      # The compose file production actually uses. `config` parses it, resolves
+      # every interpolation and validates the schema — so a typo or a missing
+      # required variable fails here rather than on the VM mid-deploy.
+      - name: Validate docker-compose.prod.yml
+        env:
+          BACKEND_IMAGE: afg-market-backend:ci
+          FRONTEND_IMAGE: afg-market-frontend:ci
+          POSTGRES_PASSWORD: ci-not-a-real-password
+          DATABASE_URL: postgresql://postgres:ci-not-a-real-password@db:5432/afg_market
+        run: |
+          set -euo pipefail
+          docker compose -f docker-compose.prod.yml config >/dev/null
+          echo "✓ docker-compose.prod.yml is valid"
+
+          # The database must never be publishable in production. A stray
+          # `ports:` entry on `db` would expose Postgres to the internet on a
+          # VM with a public IP, and nothing else in this pipeline would notice.
+          if docker compose -f docker-compose.prod.yml config \
+               | python3 -c "import sys,yaml; c=yaml.safe_load(sys.stdin); sys.exit(0 if c['services']['db'].get('ports') else 1)"; then
+            echo "::error::docker-compose.prod.yml publishes a port on the db service — Postgres must stay on the internal network"
+            exit 1
+          fi
+          echo "✓ the database publishes no ports"
+
+  # ===========================================================================
+  # Job 6: Deploy to the production VM
+  # ===========================================================================
+  # Only runs for a direct push to main, and only after every preceding job has
+  # gone green — `needs` makes a failure anywhere upstream skip this entirely.
+  deploy:
+    name: Deploy to VM
+    runs-on: ubuntu-latest
+    needs: integration
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 20
+
+    # Two pushes landing close together must not deploy at the same time. Queue
+    # rather than cancel: a cancelled deploy could leave the VM mid-rollout.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+
+    # Declaring the environment gives the deploy a URL in the Actions UI, and is
+    # where you would add a required-reviewer gate to pause deploys for approval.
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL || format('http://{0}/', vars.VM_HOST) }}
+
+    steps:
+      - name: Deploy over SSH
+        env:
+          SSH_KEY: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ vars.VM_SSH_KNOWN_HOSTS }}
+          VM_HOST: ${{ vars.VM_HOST }}
+          VM_USER: ${{ vars.VM_USER }}
+          # Passed via env, not interpolated into the script body, so the shell
+          # never parses workflow-context data as code.
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          for v in SSH_KEY KNOWN_HOSTS VM_HOST VM_USER; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is not set. See docs/VM_DEPLOYMENT.md section 6."
+              exit 1
+            fi
+          done
+
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key ~/.ssh/known_hosts
+
+          # StrictHostKeyChecking=yes with a pinned known_hosts: without it the
+          # runner would trust whatever host answers on that IP.
+          # The SHA is the entire command — the key is pinned server-side to the
+          # deploy script by a forced command, so nothing else would be accepted.
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o ConnectTimeout=15 \
+              "${VM_USER}@${VM_HOST}" "$TARGET_SHA"
+
+      - name: Verify the deployed site is serving
+        env:
+          VM_HOST: ${{ vars.VM_HOST }}
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          # deploy.sh already health-checked from inside the VM; this confirms
+          # the site is reachable from the outside world too.
+          #
+          # The fallback to the VM's IP over HTTP is correct only while
+          # SITE_ADDRESS is ":80" — once a domain is configured Caddy serves
+          # that hostname and redirects HTTP to HTTPS, and a request to the bare
+          # IP no longer matches any site. Set the SITE_URL variable at the same
+          # time you set SITE_ADDRESS.
+          BASE="${SITE_URL:-http://${VM_HOST}}"
+
+          echo "Probing ${BASE}/health"
+          RESPONSE=$(curl -fsS --max-time 15 "${BASE}/health")
+          echo "Health response: $RESPONSE"
+          echo "$RESPONSE" | grep -q '"status":"healthy"' \
+            || { echo "::error::the site did not report healthy from outside"; exit 1; }
+
+          echo "Probing ${BASE}/"
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "${BASE}/" || echo 000)
+          [ "$CODE" = "200" ] \
+            || { echo "::error::the UI did not return 200 from outside (got $CODE)"; exit 1; }
+
+          echo "✓ Deployed and serving"

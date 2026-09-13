@@ -53,7 +53,9 @@ Then open:
 - **API docs:** http://localhost:8000/docs
 - **Health check:** http://localhost:8000/health
 
-The backend container runs `alembic upgrade head` automatically on startup, applying migrations 0001–0004.
+The backend container runs `alembic upgrade head` automatically on startup, applying migrations 0001–0011.
+
+> In **production** this works differently on purpose: migrations run as their own one-shot `migrate` service that the API waits on, rather than being chained into the API's start command. See `docker-compose.prod.yml`.
 
 ### Rebuild the database from scratch
 
@@ -70,7 +72,7 @@ docker-compose up -d --build db backend
 docker-compose exec backend python -m etl.run
 ```
 
-A full ETL run fetches all 29 products × 5 years (2021–2025) from Comtrade, plus World Bank indicators and WITS tariffs — expect it to take a while. Products are fetched concurrently (`_PRODUCT_MAX_WORKERS = 3` in `etl/run.py`) rather than one at a time. Useful shortcuts:
+A full ETL run fetches all 38 products × 5 years (2021–2025) from Comtrade, plus World Bank indicators and WITS tariffs — expect it to take a while. Products are fetched concurrently (`_PRODUCT_MAX_WORKERS = 3` in `etl/run.py`) rather than one at a time. Useful shortcuts:
 
 ```bash
 # One product only
@@ -84,10 +86,12 @@ docker-compose exec backend python -m etl.run --skip-world-bank
 ### Run tests and lint (no Docker needed)
 
 ```bash
-pip install -r requirements.txt
-pytest backend/tests/ -v    # 47 tests, uses in-memory SQLite
+pip install -r requirements.txt -r requirements-dev.txt
+pytest              # 253 tests; 43 skip without TEST_DATABASE_URL
 ruff check .
 ```
+
+`requirements.txt` is a **generated lockfile** — edit `requirements.in` and recompile with `pip-compile --strip-extras requirements.in -o requirements.txt`. CI fails if the two drift apart.
 
 `tests/test_comtrade_fetch.py` covers the Comtrade response-parsing layer (the one external source that previously had no fetch-layer tests, unlike WITS/World Bank). `etl/tests/test_run.py` covers both failure resilience (a single HS code's fetch failing, or an entire product's `run_product()` crashing, must not take down the rest of the run) and the five pure helper functions that decide which markets get scored/detailed and how tariffs are averaged across HS codes (`_all_market_codes`, `_top_market_codes`, `_market_sizes_by_code`, `_resolve_market_name`, `_fetch_tariffs_for_product`) — previously untested. `etl/tests/test_pipeline_integration.py` runs the real fetch → transform → load chain together against Postgres (only the Comtrade HTTP call is mocked) to catch boundary bugs none of the per-layer tests can see. `etl/tests/test_verify.py` proves each of `etl/verify.py`'s checks (the ones now gating `etl.yml`) both stays quiet on clean data and actually fires when a specific problem is seeded — negative values, mismatched supplier codes, a wrong `market_share_pct`, an out-of-range score — rather than just always returning empty. All of these run as part of the normal `pytest -v`; the Postgres-backed ones (`test_load.py`, `test_pipeline_integration.py`, `test_verify.py`) need `TEST_DATABASE_URL` (see `test_load.py`'s docstring) and skip automatically without it.
 
@@ -190,7 +194,7 @@ frontend/
   app/                     # Next.js pages (product grid, discover, market profile)
   components/              # ScoreBadge, ScoreBar, ProductGrid, etc.
   lib/api.ts               # Backend fetch client
-migrations/versions/       # Alembic schema (0001–0004)
+migrations/versions/       # Alembic schema (0001–0011)
 indicator_definitions.json # Tooltip text for UI metrics
 ```
 
@@ -198,8 +202,12 @@ indicator_definitions.json # Tooltip text for UI metrics
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `.github/workflows/ci.yml` | Push/PR to `main` or `claude/**` | `ruff check` + `pytest backend/tests/` |
-| `.github/workflows/etl.yml` | Monthly cron (1st of month, 02:00 UTC) + manual | Full ETL run (needs `COMTRADE_API_KEY` secret) |
+| `.github/workflows/ci-cd.yml` | Push/PR to `main` or `claude/**` | Six jobs: Python lint+tests, dependency-lock verification, frontend lint+build, image build & GHCR publish, Docker integration tests, and (on `main` only) deploy to the production VM |
+| `.github/workflows/etl.yml` | Monthly cron (1st of month, 02:00 UTC) + manual | Runs the ETL **on the VM** over SSH, so Postgres never publishes a port. Opens a GitHub issue if it fails |
+
+Deployment setup — VM provisioning, the two SSH deploy keys and their forced
+commands, TLS, and the repository variables CI needs — is documented separately
+in [`docs/VM_DEPLOYMENT.md`](VM_DEPLOYMENT.md).
 
 ---
 
@@ -235,8 +243,13 @@ Fetched per country via `fetch_world_bank_indicators()` in `etl/fetch.py`:
 | GDP (current USD) | `NY.GDP.MKTP.CD` | Stored on indicators (context) |
 | GDP per capita | `NY.GDP.PCAP.CD` | Stored on indicators (context) |
 | Logistics Performance Index | `LP.LPI.OVRL.XQ` | Market quality score (1–5 scale) |
-| Regulatory Quality | `GOV_WGI_RQ.EST` (WGI) | Market quality score (-2.5 to 2.5) |
-| Political Stability | `GOV_WGI_PV.EST` (WGI) | Market quality score (-2.5 to 2.5) |
+| Regulatory Quality | `GOV_WGI_RQ.SC` (WGI) | Market quality score (0–100) |
+| Political Stability | `GOV_WGI_PV.SC` (WGI) | Market quality score (0–100) |
+
+Both WGI fields deliberately use the `.SC` ("score", 0–100) variant rather than
+`.EST` (the −2.5 to +2.5 "estimate"): a plain 0–100 range is easier to reason
+about and to display, and it means `_score_market_quality()` only has to rescale
+LPI. Migrations 0010 and 0011 widened the stored columns for the new range.
 
 Requested as a single `2021:2025` date range per indicator; WB doesn't publish evenly across it (LPI is only released in select years, WGI typically lags 1–2 years), so actual per-country/year coverage is whatever the API returns.
 
@@ -332,16 +345,46 @@ Weights must sum to 1.0. Change them in `config.py` and re-run the ETL.
 
 Implemented in `etl/transform.py`:
 
+All normalisation follows the OECD (2008) *Handbook on Constructing Composite
+Indicators*, Step 5: log-transform first where the raw quantity is positively
+skewed (§5.1), then Min-Max (§5.3) against a **fixed external reference bound**
+(§5.4) instead of the observed sample min/max. Those bounds live in `config.py`
+and are deliberately **not** recomputed per ETL run — a bound that moved with the
+data would make `opportunity_score` incomparable from one month to the next.
+
 | Dimension | Scoring formula |
 |-----------|----------------|
-| **Market size** | Log-scale: `log1p(size_usd) / log_max × 100`, capped at 100 |
-| **Market growth** | CAGR mapping: 0% → 50, +20% → 100, -20% → 0 (linear) |
-| **Market quality** | Average of sub-scores: LPI (1–5 → 0–100), WGI indicators (-2.5–2.5 → 0–100). Defaults to 50 if no data |
-| **Price competitiveness** | Categorical: Highly Competitive → 100, Competitive → 75, Average → 50, Above Market → 25 |
-| **Tariff** | Linear: `max(0, 100 - rate × 3)`. 0% → 100, 33%+ → 0. Defaults to 50 if unavailable |
-| **Afghan foothold** | Log-scale of export value: $0 → 25, $1M → ~60, $10M → ~75, $100M → ~90 |
-| **Distance** | Linear: 0 km → 100, 15,000 km → 0. Defaults to 50 if unknown |
-| **Language** | `LANGUAGE_SIMILARITY × 100` (0.0–1.0 lookup) |
+| **Market size** | `100 × ln(size / F) / ln(max / F)`, F = `MARKET_SIZE_LOG_FLOOR_USD` (500). `max` is the leading market for *this* product, so the leader always scores 100 |
+| **Market growth** | Min-Max on the symmetric band `[−W, +W]`, W = `CAGR_SCORE_BAND_PCT` (75) → `50 + cagr × (50/W)`. 0% CAGR lands on 50 as the algebraic result, not a bolted-on constant |
+| **Market quality** | Mean of whichever sub-scores exist: LPI (1–5 → 0–100), regulatory quality and political stability (already 0–100 on the WGI `.SC` scale) |
+| **Price competitiveness** | Categorical: Substantially Below Market → 100, Below Market → 75, Near Market → 50, Above Market → 25 |
+| **Tariff** | `100 × (1 − ln1p(rate) / ln1p(ceiling))`, ceiling = `TARIFF_SCORE_LOG_CEILING_PCT` (35). 0% → 100, ~3.3% (the real median) → ~59, 10% → ~33, 35%+ → 0 |
+| **Afghan foothold** | `100 × ln1p(value) / ln1p(product max)`. A historical-only export (no current-year figure) scores at 0.7×, capped at 90; no trade on record at all → 0 |
+| **Distance** | `100 × (1 − ln1p(km) / ln1p(20015))`. Log, not linear — gravity-model literature treats distance's effect on trade as multiplicative |
+| **Language** | `LANGUAGE_SIMILARITY × 100` (0.0–1.0, from DICL) |
+
+Each constant's empirical derivation — including the alternatives that were
+tested and rejected — is documented inline in `config.py`. Worth reading before
+changing any of them.
+
+### Missing data is excluded, not guessed
+
+`market_size`, `market_growth`, `market_quality`, `tariff` and `distance` return
+`None` when their underlying data is genuinely absent. Those five have no
+defensible neutral value, so rather than assuming one, the dimension is dropped
+from the composite and the remaining weights are renormalised to sum back to
+1.0 (`enrich_indicators_with_scores()` in `etl/transform.py`, written to
+generalise over any combination being missing at once).
+
+This replaced a neutral-50 default in September 2026. The reasoning is clearest
+for tariff: a guessed 50 asserts a middling tariff on no evidence, and a guessed
+0 would double-count something `score_afg_foothold` already records as a
+confirmed fact — "no Afghan trade history here". Not knowing the tariff is a
+genuinely different state from knowing it is bad.
+
+`price_competitiveness`, `afg_foothold` and `language` keep a real fallback
+value instead, because for those a missing input *is* meaningful: no recorded
+Afghan exports is a true zero foothold, not an unknown.
 
 ### Composite calculation
 
@@ -357,15 +400,31 @@ Thresholds in `config.py` → `PRICE_COMPETITIVENESS`:
 
 | Category | Condition |
 |----------|-----------|
-| Highly Competitive | Afghan price > 10% below market average |
-| Competitive | Up to 10% below market average |
-| Average | Within ±10% of market average |
-| Above Market | More than 10% above market average |
+| Substantially Below Market | Afghan price more than 10% below the market average |
+| Below Market | Up to 10% below the market average |
+| Near Market | Within 10% above the market average |
+| Above Market | More than 10% above the market average |
+
+The labels were renamed from the old "Highly Competitive / Competitive /
+Average" wording in commit `f394ddb`: those read as a verdict on the exporter,
+when the underlying number is just a price comparison. A low unit price is not
+automatically good news — it can equally mean lower quality or weaker bargaining
+position — so the labels now describe what was measured and leave the judgement
+to the reader. The UI calls the same figure "Price gap", with a click-to-reveal
+tooltip explaining it.
+
+Cross-supplier price comparison excludes outliers outside
+`[median / 10, median × 10]` (`PRICE_OUTLIER_BAND_MULTIPLIER`), the same band
+CEPII uses when cleaning raw Comtrade unit values — reporters disagree about
+quantity units often enough that unfiltered unit prices are unusable.
+Carpets and cashmere sweaters are priced by their native unit (m², pieces)
+rather than net weight where every supplier reports one consistently; the
+`price_basis` column (migration 0009) records which basis was used.
 
 ### What the frontend shows
 
-- **Product grid** (`/`) — all 29 products with top market and opportunity score
-- **Discovery page** (`/discover/[hs_code]`) — ranked markets with score breakdown bars across all 9 dimensions
+- **Product grid** (`/`) — all 38 products with top market and opportunity score
+- **Discovery page** (`/discover/[hs_code]`) — ranked markets with score breakdown bars across the 8 weighted dimensions. A dimension with no data shows an em dash and an empty bar rather than a misleading midpoint
 - **Market profile** (`/discover/[hs_code]/markets/[market_code]`) — full trade data, competitors, score breakdown, and practical next steps
 
 ### Practical next steps
@@ -401,4 +460,68 @@ When going through this with your colleague, a natural order:
 - **`YEARS` extended to include 2025** — `config.py` now requests 2021–2025 (previously 2021–2024); Comtrade/World Bank/WITS each handle a year with no data differently (see §3 above), so this doesn't guarantee 2025 rows exist yet for every source
 - **Several HS codes were corrected** — Pistachios, Cumin Seeds, and Asafoetida were previously pointing at the wrong 6-digit codes; Kilims, Dried Mulberries, and Lapis Lazuli/Marble were each collapsed into or split out of catch-all codes to match how these goods are actually reported (see README's "Products covered" notes for the reasoning per product)
 - **HS codes are now validated against official reference data, not just eyeballed** — `reference/` holds Comtrade's own HS2017 (`hs_h5.json`) and HS2022 (`hs_h6.json`) nomenclature plus the WCO/UNSD HS2017↔HS2022 correlation table (`hs2017_hs2022_correlation.csv`). `tests/test_config.py` cross-checks every `PRODUCTS` code against these: it must be a real, product-level (leaf) code, must cover every year in `YEARS` under whichever HS revision was in force that year (2021 = HS2017, 2022+ = HS2022), and any revision-boundary split/merge must have its correlated successor/predecessor also present in `codes`. This caught a real bug: **Pine Nuts** was using `080290`, a code retired at the HS2022 cutover — fixed to include the HS2017 code (covers 2021) alongside its two HS2022 successors `080291`/`080292` (covers 2022+). Worth re-running this suite any time a product is added or an HS code is changed.
-- **`etl/verify.py`** (new) — a standalone data-verification tool, separate from the pytest suite: internal DB sanity checks plus optional live spot-checks against the source APIs (see §1 above for usage). Its internal checks now also run automatically as a step in `.github/workflows/etl.yml`, right after every scheduled/manual ETL run, and fail that workflow on real structural problems (negative values, duplicate supplier codes, `market_share_pct` mismatches, out-of-range scores) — not on expected source-data gaps like WGI's publishing lag
+- **`etl/verify.py`** (new) — a standalone data-verification tool, separate from the pytest suite: internal DB sanity checks plus optional live spot-checks against the source APIs (see §1 above for usage). Its internal checks now also run automatically as a step in `.github/workflows/etl.yml`, right after every scheduled/manual ETL run, and fail that workflow on real structural problems (negative values, duplicate supplier codes, `market_share_pct` mismatches, out-of-range scores) — not on expected source-data gaps like WGI's publishing lag — though note that step now runs on the VM as part of `deploy/vm/run-etl.sh`, not on the GitHub runner
+
+---
+
+## 7. Production Deployment
+
+Full setup guide: [`docs/VM_DEPLOYMENT.md`](VM_DEPLOYMENT.md). The shape of it:
+
+**A push to `main` deploys itself.** `.github/workflows/ci-cd.yml` runs lint and
+tests, verifies the dependency lockfiles haven't drifted, builds both Docker
+images, runs them against a real Postgres, and then SSHes into the VM to deploy
+the exact commit that passed.
+
+Four things about this are deliberate and worth understanding before changing
+any of it:
+
+**The VM never builds.** It pulls images tagged `sha-<40-char commit>` from
+GHCR. A rebuild on the VM would produce a third image — different base layer,
+different dependency resolution, built on a different day — so the artifact that
+passed CI would never be the one serving traffic. It also keeps compilation off
+the box that is serving users.
+
+**The deploy key can only deploy.** It is pinned server-side to
+`deploy/vm/deploy.sh` by an SSH forced command, and the only input it accepts is
+a commit SHA that must already be an ancestor of `origin/main`. A leaked key
+cannot open a shell, read the database, or check out an arbitrary commit — the
+ancestry check specifically stops it deploying a commit from before a security
+fix. The monthly ETL uses a **second, separate key** pinned to
+`deploy/vm/run-etl.sh`, so a key that refreshes data cannot change what is
+running.
+
+**Failed deploys roll back on their own.** `deploy.sh` health-checks after
+bringing the stack up and, on failure, dumps container state and logs, then
+brings the previous commit back and re-checks. Migrations run as a one-shot
+`migrate` service that the API waits on (`service_completed_successfully`), so
+nothing ever serves a half-migrated database — and a failed migration presents
+as a failed deploy step rather than an API crash-loop.
+
+**The database publishes no port.** This is the reason the ETL moved onto the
+VM: keeping it on GitHub-hosted runners would mean allowlisting GitHub's runner
+IP ranges, which are large and change constantly — effectively a permanently
+open production database for one job a month.
+
+### Things that will bite you
+
+- **`/health` is a real query now.** It runs `SELECT 1` and returns **503** with
+  `{"status": "unhealthy"}` when the database is unreachable. The container
+  `HEALTHCHECK`, compose's `service_healthy` gate, `deploy.sh`'s rollback
+  decision and CI's post-deploy probe all grep for the exact string
+  `"status":"healthy"`. Changing that response shape silently breaks the deploy
+  gate, so `test_api.py` and the integration job both assert it in each state.
+- **`requirements.txt` is generated.** Edit `requirements.in` and recompile.
+  CI's `deps` job fails on drift.
+- **`.dockerignore` is load-bearing.** Before it existed, `COPY . .` was baking
+  `.env` — Comtrade API key included — into every backend image, along with
+  `.git`. CI now writes a canary `.env`, builds, and fails if the file or its
+  contents appear in any layer. Don't remove that check.
+- **The container runs unprivileged against a root-owned `/app`.** Anything that
+  writes to the working directory fails. This already caught `etl/run.py`, whose
+  module-level `FileHandler("etl_run.log")` killed the pipeline at import time
+  inside the image; it now degrades to stdout-only with a warning, and
+  `ETL_LOG_FILE` overrides the path.
+- **No database backups exist.** Nothing in this repo creates any. A full ETL
+  rebuild takes hours and Comtrade rate-limits, so losing the volume is a real
+  outage — `pg_dump` to off-VM storage is the first thing to add.
