@@ -6,7 +6,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).parents[1]
 
 
@@ -77,3 +76,46 @@ def test_restore_check_uses_isolated_database_and_checks_core_tables(tmp_path: P
 
     assert result.returncode == 0, result.stderr
     assert "restore verified successfully" in result.stdout
+
+
+def test_deploy_refuses_secret_file_with_unsafe_permissions(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text("POSTGRES_PASSWORD=a-secure-password-that-is-long\n")
+    env_file.chmod(0o644)
+
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "deploy/vm/deploy.sh")],
+        env={**os.environ, "AFG_MARKET_DIR": str(tmp_path), "SSH_ORIGINAL_COMMAND": "a" * 40},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert ".env must have mode 600" in result.stderr
+
+
+def test_deploy_refuses_placeholder_production_secrets(tmp_path: Path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "POSTGRES_PASSWORD=postgres",
+                "DATABASE_URL=postgresql://postgres:postgres@db:5432/afg_market",
+                "COMTRADE_API_KEY=your_api_key_here",
+                "SITE_ADDRESS=:80",
+            ]
+        )
+    )
+    env_file.chmod(0o600)
+
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "deploy/vm/deploy.sh")],
+        env={**os.environ, "AFG_MARKET_DIR": str(tmp_path), "SSH_ORIGINAL_COMMAND": "a" * 40},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "POSTGRES_PASSWORD must be a non-default value" in result.stderr
