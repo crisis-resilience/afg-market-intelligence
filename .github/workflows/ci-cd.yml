@@ -483,9 +483,22 @@ jobs:
       - name: Smoke-test the frontend image
         run: |
           set -euo pipefail
-          CONTAINER_ID=$(docker run -d -p 3001:3000 \
-            -e BACKEND_URL="http://127.0.0.1:8001" \
+          docker network create afg-market-ci >/dev/null
+          BACKEND_ID=$(docker run -d --name afg-market-ci-backend \
+            --network afg-market-ci \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+            afg-market-backend:ci)
+          FRONTEND_ID=$(docker run -d -p 3001:3000 \
+            --network afg-market-ci \
+            -e BACKEND_URL="http://afg-market-ci-backend:8000" \
             afg-market-frontend:ci)
+
+          cleanup() {
+            docker rm -f "$FRONTEND_ID" "$BACKEND_ID" >/dev/null 2>&1 || true
+            docker network rm afg-market-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
 
           for i in $(seq 1 30); do
             if curl -fsS -o /dev/null http://localhost:3001/ 2>/dev/null; then break; fi
@@ -496,11 +509,10 @@ jobs:
           CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:3001/ || echo 000)
           if [ "$CODE" != "200" ]; then
             echo "::error::the frontend image did not serve / (HTTP $CODE)"
-            docker logs "$CONTAINER_ID" || true
-            docker rm -f "$CONTAINER_ID" >/dev/null 2>&1 || true
+            docker logs "$FRONTEND_ID" || true
+            docker logs "$BACKEND_ID" || true
             exit 1
           fi
-          docker rm -f "$CONTAINER_ID" >/dev/null
           echo "✓ the frontend image boots and serves"
 
       # The compose file production actually uses. `config` parses it, resolves
