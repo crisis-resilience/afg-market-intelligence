@@ -354,7 +354,7 @@ The monthly ETL runs **on the VM**, triggered over SSH by its own separate key, 
 - [x] Market-entry next steps per market (incl. tariff-aware guidance)
 - [x] Next.js frontend — product grid, discovery, market profile
 - [x] CI/CD pipeline with automated VM deployment and rollback
-- [ ] Database backups (nothing in this repo does this yet — see `docs/VM_DEPLOYMENT.md` §10)
+- [x] Nightly validated PostgreSQL backups to private Azure Blob storage, with an isolated restore check
 - [ ] Natural language → HS code classifier ("I sell dried figs")
 - [ ] Buyer contact directory integration
 - [ ] Simplified "business owner" view (vs. analyst view)

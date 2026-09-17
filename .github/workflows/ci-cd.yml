@@ -411,6 +411,7 @@ jobs:
             --add-host=host.docker.internal:host-gateway \
             -p 8001:8000 \
             -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+            -e API_DOCS_ENABLED=false \
             afg-market-backend:ci)
 
           fail_with_logs() {
@@ -447,6 +448,12 @@ jobs:
           [ "$API_STATUS" = "200" ] \
             || fail_with_logs "GET /api/products returned $API_STATUS, expected 200"
           echo "✓ /api/products queries the migrated schema successfully"
+
+          DOCS_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            --max-time 10 http://localhost:8001/docs)
+          [ "$DOCS_STATUS" = "404" ] \
+            || fail_with_logs "/docs returned $DOCS_STATUS with API_DOCS_ENABLED=false, expected 404"
+          echo "✓ interactive API docs are disabled in the production configuration"
 
           docker rm -f "$CONTAINER_ID" >/dev/null
 
@@ -505,6 +512,8 @@ jobs:
           FRONTEND_IMAGE: afg-market-frontend:ci
           POSTGRES_PASSWORD: ci-not-a-real-password
           DATABASE_URL: postgresql://postgres:ci-not-a-real-password@db:5432/afg_market
+          COMTRADE_API_KEY: ci-not-a-real-key
+          SITE_ADDRESS: https://afg-market.example.org
         run: |
           set -euo pipefail
           docker compose -f docker-compose.prod.yml config >/dev/null
