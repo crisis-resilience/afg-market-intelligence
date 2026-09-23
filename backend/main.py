@@ -7,10 +7,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import discovery, meta, products
 
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
 app = FastAPI(
     title="AFG Market Intelligence API",
     description="Afghanistan market opportunity discovery tool for Afghan exporters",
     version="2.0.0",
+    docs_url="/docs" if _env_flag("API_DOCS_ENABLED", True) else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if _env_flag("API_DOCS_ENABLED", True) else None,
 )
 
 # Comma-separated list of allowed browser origins, e.g.

@@ -522,6 +522,9 @@ open production database for one job a month.
   module-level `FileHandler("etl_run.log")` killed the pipeline at import time
   inside the image; it now degrades to stdout-only with a warning, and
   `ETL_LOG_FILE` overrides the path.
-- **No database backups exist.** Nothing in this repo creates any. A full ETL
-  rebuild takes hours and Comtrade rate-limits, so losing the volume is a real
-  outage — `pg_dump` to off-VM storage is the first thing to add.
+- **Backups require one-time Azure setup.** `deploy/vm/backup-db.sh` and its
+  systemd timer create validated nightly dumps and upload them to a private
+  Blob container using the VM managed identity. They do nothing until AzCopy,
+  the identity role, container URL, and timer are configured as described in
+  `docs/VM_DEPLOYMENT.md` §11. Run `verify-backup.sh` after setup to prove a
+  full restore, not merely that an archive exists.

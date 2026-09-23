@@ -20,6 +20,12 @@
 # the commit SHA and never runs this file by hand.
 # =============================================================================
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   # ── Reverse proxy: TLS termination, routes /api to the API, everything
   #    else to the Next.js server ─────────────────────────────────────────────
@@ -36,7 +42,8 @@ services:
       # auto-renewing Let's Encrypt certificate. ":80" serves plain HTTP and is
       # acceptable only for a throwaway demo -- Let's Encrypt cannot issue for
       # a bare IP address.
-      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to an https URL in .env — see docs/VM_DEPLOYMENT.md}
+    logging: *default-logging
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # MUST persist: these hold the issued certificates and the ACME account
@@ -71,6 +78,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    logging: *default-logging
     networks:
       - afg-market-network
 
@@ -87,6 +95,14 @@ services:
     restart: "no"
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env — see .env.example}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     command: alembic upgrade head
     depends_on:
       db:
@@ -102,11 +118,20 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env — see .env.example}
       # Needed by the ETL, which runs from this same image (see etl.yml).
-      COMTRADE_API_KEY: ${COMTRADE_API_KEY:-}
+      COMTRADE_API_KEY: ${COMTRADE_API_KEY:?set COMTRADE_API_KEY in .env — required by the scheduled ETL}
       # Caddy serves the API and UI from one origin, so this normally needs no
       # cross-origin allowance at all. See backend/main.py.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -131,6 +156,23 @@ services:
       # routed by Caddy straight to the backend and never passes through here.
       BACKEND_URL: http://backend:8000
       NODE_ENV: production
+    read_only: true
+    # Next's server writes its runtime cache (optimized images from
+    # /_next/image, plus fetch/ISR data) under /app/.next/cache. On a read-only
+    # root that path is not creatable, and Next swallows the failure: responses
+    # still return 200, but nothing is ever cached. tmpfs rather than a volume
+    # so the cache dies with the container and never outlives the build that
+    # wrote it. uid/gid 1001 is the `nextjs` user from Dockerfile.frontend. Next
+    # caps the image cache at half the free space it sees at startup, so it
+    # stays inside this size.
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/.next/cache:size=256m,uid=1001,gid=1001,mode=0755
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
     depends_on:
       backend:
         condition: service_healthy

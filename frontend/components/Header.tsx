@@ -18,14 +18,6 @@ export default function Header() {
             <Link href="/" className="opacity-80 hover:opacity-100 transition-opacity">
               Products
             </Link>
-            <a
-              href="http://localhost:8000/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="opacity-60 hover:opacity-80 transition-opacity text-xs"
-            >
-              API docs
-            </a>
           </nav>
         </div>
       </div>

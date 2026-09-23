@@ -42,13 +42,37 @@ TARGET_SHA="${SSH_ORIGINAL_COMMAND:-}"
 
 cd "$REPO_DIR" || fail "repo not found at ${REPO_DIR}"
 
+read_env() {
+  sed -n "s/^${1}=//p" .env 2>/dev/null | tr -d "\"'" | head -1
+}
+
+# Refuse insecure or incomplete production configuration before touching the
+# currently-running stack. Compose catches missing values, but not placeholders,
+# plain HTTP, or a secret file readable by other local users.
+[ -f .env ] || fail ".env does not exist — see docs/VM_DEPLOYMENT.md section 4"
+[ "$(stat -c '%a' .env)" = "600" ] \
+  || fail ".env must have mode 600 (run: chmod 600 .env)"
+
+POSTGRES_PASSWORD="$(read_env POSTGRES_PASSWORD)"
+DATABASE_URL="$(read_env DATABASE_URL)"
+COMTRADE_API_KEY="$(read_env COMTRADE_API_KEY)"
+SITE_ADDRESS="$(read_env SITE_ADDRESS)"
+
+[ "${#POSTGRES_PASSWORD}" -ge 24 ] && [ "$POSTGRES_PASSWORD" != "postgres" ] \
+  || fail "POSTGRES_PASSWORD must be a non-default value of at least 24 characters"
+[ -n "$DATABASE_URL" ] && [[ "$DATABASE_URL" != *"postgres:postgres@"* ]] \
+  || fail "DATABASE_URL is missing or contains the default database password"
+[ -n "$COMTRADE_API_KEY" ] && [ "$COMTRADE_API_KEY" != "your_api_key_here" ] \
+  || fail "COMTRADE_API_KEY is missing or still set to the placeholder"
+[[ "$SITE_ADDRESS" == https://* ]] \
+  || fail "SITE_ADDRESS must be an https:// URL in production"
+
 # Where to probe for health. This has to follow SITE_ADDRESS: once a domain is
 # configured Caddy serves only that hostname and redirects HTTP to HTTPS, so a
 # request to http://localhost would 404 and this script would roll back a
 # perfectly healthy deploy. --resolve keeps the request on the loopback
 # interface while still sending the hostname the certificate was issued for,
 # so this works without depending on NAT hairpinning.
-SITE_ADDRESS="$(sed -n 's/^SITE_ADDRESS=//p' .env 2>/dev/null | tr -d "\"'" | head -1)"
 CURL_RESOLVE=()
 case "$SITE_ADDRESS" in
   https://*)
