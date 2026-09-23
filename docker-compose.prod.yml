@@ -157,8 +157,17 @@ services:
       BACKEND_URL: http://backend:8000
       NODE_ENV: production
     read_only: true
+    # Next's server writes its runtime cache (optimized images from
+    # /_next/image, plus fetch/ISR data) under /app/.next/cache. On a read-only
+    # root that path is not creatable, and Next swallows the failure: responses
+    # still return 200, but nothing is ever cached. tmpfs rather than a volume
+    # so the cache dies with the container and never outlives the build that
+    # wrote it. uid/gid 1001 is the `nextjs` user from Dockerfile.frontend. Next
+    # caps the image cache at half the free space it sees at startup, so it
+    # stays inside this size.
     tmpfs:
       - /tmp:size=64m,mode=1777
+      - /app/.next/cache:size=256m,uid=1001,gid=1001,mode=0755
     security_opt:
       - no-new-privileges:true
     cap_drop:
