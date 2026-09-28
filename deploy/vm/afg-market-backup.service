@@ -1,0 +1,16 @@
+[Unit]
+Description=Back up AFG Market PostgreSQL to Azure Blob Storage
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=azureuser
+Environment=AFG_MARKET_DIR=/home/azureuser/afg-market-intelligence
+Environment=AFG_MARKET_BACKUP_DIR=/home/azureuser/afg-market-backups
+EnvironmentFile=-/etc/afg-market/backup.env
+ExecStart=/usr/local/bin/afg-market-backup
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

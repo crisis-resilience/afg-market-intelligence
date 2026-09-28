@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from backend.database import get_db
-from backend.main import app
+from backend.main import _env_flag, app
 
 # ── Test DB setup (SQLite in-memory) ─────────────────────────────────────────
 
@@ -175,6 +175,15 @@ def create_tables():
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+def test_env_flag_parses_common_boolean_values(monkeypatch):
+    monkeypatch.setenv("FEATURE_FLAG", "true")
+    assert _env_flag("FEATURE_FLAG", False) is True
+    monkeypatch.setenv("FEATURE_FLAG", "OFF")
+    assert _env_flag("FEATURE_FLAG", True) is False
+    monkeypatch.delenv("FEATURE_FLAG")
+    assert _env_flag("FEATURE_FLAG", True) is True
 
 
 @pytest.fixture

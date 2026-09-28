@@ -51,7 +51,7 @@ leaks, it cannot open a shell, read the database, or deploy an arbitrary commit.
 |---|---|
 | A Linux VM | 2 vCPU / 4 GB RAM minimum. The ETL is the memory-hungry part, not the API. |
 | Docker Engine + Compose v2 | `docker compose version` must report v2.x |
-| A public IP | And ideally a domain pointed at it — see §5 on HTTPS |
+| A public IP and domain | Production requires a domain pointed at the VM — see §5 on HTTPS |
 | Ports 80 and 443 open | Nothing else needs to be reachable. **Not 5432.** |
 | A GitHub account with push access | To set the repository variables and secrets in §6 |
 
@@ -62,6 +62,7 @@ leaks, it cannot open a shell, read the database, or deploy an arbitrary commit.
 ```bash
 # On the VM, as your admin user (not root)
 sudo apt-get update && sudo apt-get install -y docker.io docker-compose-plugin git
+sudo apt-get install -y unattended-upgrades
 sudo usermod -aG docker "$USER"
 newgrp docker   # or log out and back in
 
@@ -89,7 +90,7 @@ chmod 600 .env      # it holds the database password and the Comtrade key
 Fill in:
 
 ```bash
-# Generate with: openssl rand -base64 32
+# Generate URL-safe credentials with: openssl rand -hex 32
 POSTGRES_PASSWORD=<a long random string>
 
 # Must match POSTGRES_PASSWORD above. Host is `db` — the compose service name,
@@ -119,10 +120,12 @@ Caddy handles certificates itself, with no certbot and no renewal cron.
 | `SITE_ADDRESS` | Result |
 |---|---|
 | `https://afg-market.example.org` | Real, auto-renewing Let's Encrypt certificate |
-| `:80` | Plain HTTP, no certificate — **demo only** |
+| `:80` | Rejected by the production Compose configuration |
 
-Let's Encrypt cannot issue certificates for a bare IP address, so with only the
-VM's IP you must either point a domain at it or accept `:80`.
+Let's Encrypt cannot issue certificates for a bare IP address. The production
+Compose file deliberately requires `SITE_ADDRESS`, so point a domain at the VM
+before deploying. For a short-lived HTTP-only demo, use the development stack,
+not `docker-compose.prod.yml`.
 
 Point an `A` record at the VM **before** the first deploy. Caddy attempts
 issuance on startup, and repeated failures against a domain that doesn't resolve
@@ -145,6 +148,8 @@ deployed; the deploy key cannot run the ETL.
 # Install the two scripts from the repo
 sudo install -m 755 ~/afg-market-intelligence/deploy/vm/deploy.sh   /usr/local/bin/afg-market-deploy
 sudo install -m 755 ~/afg-market-intelligence/deploy/vm/run-etl.sh  /usr/local/bin/afg-market-etl
+sudo install -m 755 ~/afg-market-intelligence/deploy/vm/backup-db.sh /usr/local/bin/afg-market-backup
+sudo install -m 755 ~/afg-market-intelligence/deploy/vm/verify-backup.sh /usr/local/bin/afg-market-verify-backup
 
 # Generate the two keypairs (no passphrase — CI cannot type one)
 ssh-keygen -t ed25519 -f ~/.ssh/afg_deploy_key -N "" -C "github-actions-deploy"
@@ -280,11 +285,97 @@ What is deliberately true about this setup:
   falls back to `http://localhost:3000`, not `*`. Caddy serves the API and UI
   from one origin, so production normally needs no cross-origin allowance at all.
 
-Still worth doing, and deliberately not automated here:
+- **API docs are disabled by default** in production. Set
+  `API_DOCS_ENABLED=true` only if publishing `/docs` and `/openapi.json` is
+  intentional.
+- **Backend, migration, and frontend containers have read-only filesystems**,
+  no added Linux capabilities, and `no-new-privileges`. Container JSON logs
+  rotate instead of consuming the VM disk without limit.
 
-- **Back up the database.** Nothing in this repo does. `pg_dump` on a cron to
-  off-VM storage is the minimum; the ETL takes hours to rebuild from the source
-  APIs, and Comtrade rate-limits.
-- **Unattended security upgrades** on the host.
-- **A firewall** (`ufw`, or your cloud's security group) closing everything but
-  22, 80 and 443.
+Azure controls remain outside this repository. Before launch:
+
+- Configure the Network Security Group to allow 80/443 from the internet and
+  22 only from named administrator or VPN source IPs. Do not add 5432.
+- Disable SSH password authentication after verifying key access in a second
+  session. Do not lock out the only administrative path.
+- Enable unattended security updates and Azure Monitor alerts for VM
+  availability, disk use, memory pressure, and `/health`.
+
+---
+
+## 11. Automated database backups to Azure Blob
+
+`deploy/vm/backup-db.sh` creates a PostgreSQL custom-format archive, proves that
+`pg_restore` can read it, writes a SHA-256 checksum, and uploads both files with
+AzCopy. Authentication uses the VM's system-assigned managed identity; no
+storage key or SAS token is stored on disk.
+
+Create a private Storage account/container, enable the VM identity, and grant
+that identity `Storage Blob Data Contributor` on only the backup account or
+container. Example Azure CLI commands (run from an authenticated admin shell):
+
+```bash
+az vm identity assign --resource-group <resource-group> --name <vm-name>
+VM_PRINCIPAL_ID="$(az vm show --resource-group <resource-group> --name <vm-name> \
+  --query identity.principalId -o tsv)"
+STORAGE_ID="$(az storage account show --resource-group <resource-group> \
+  --name <storage-account> --query id -o tsv)"
+az role assignment create --assignee-object-id "$VM_PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" --scope "$STORAGE_ID"
+az storage container create --account-name <storage-account> \
+  --name afg-market-backups --auth-mode login
+```
+
+Install AzCopy using Microsoft's current package instructions, then install and
+enable the timer:
+
+```bash
+sudo install -d -m 700 /etc/afg-market
+sudo tee /etc/afg-market/backup.env >/dev/null <<'EOF'
+AZURE_STORAGE_CONTAINER_URL=https://<storage-account>.blob.core.windows.net/afg-market-backups
+AFG_MARKET_BACKUP_RETENTION_DAYS=7
+EOF
+sudo chmod 600 /etc/afg-market/backup.env
+
+sudo install -m 755 deploy/vm/backup-db.sh /usr/local/bin/afg-market-backup
+sudo install -m 755 deploy/vm/verify-backup.sh /usr/local/bin/afg-market-verify-backup
+sudo install -m 644 deploy/vm/afg-market-backup.service /etc/systemd/system/
+sudo install -m 644 deploy/vm/afg-market-backup.timer /etc/systemd/system/
+# If the VM user/path differs from azureuser, edit the service before enabling.
+sudo systemctl daemon-reload
+sudo systemctl enable --now afg-market-backup.timer
+sudo systemctl start afg-market-backup.service
+sudo journalctl -u afg-market-backup.service --no-pager
+```
+
+The timer runs nightly at 01:15 UTC. Configure Azure Blob lifecycle management
+for the required remote retention (recommended: at least 35 daily copies plus
+monthly archive tiers). `AFG_MARKET_BACKUP_RETENTION_DAYS` affects only the
+small local cache, never Blob retention.
+
+Test a real restore after setup and at least quarterly:
+
+```bash
+/usr/local/bin/afg-market-verify-backup \
+  ~/afg-market-backups/afg-market-YYYYMMDDTHHMMSSZ.dump
+```
+
+This restores into an isolated `afg_market_restore_verify` database, checks the
+four core tables, then removes the throwaway database. A backup is not proven
+until this command succeeds.
+
+---
+
+## 12. First-launch checklist
+
+1. Confirm DNS resolves to the VM and `SITE_ADDRESS` is an HTTPS URL.
+2. Confirm the NSG exposes only 80/443 publicly and restricts SSH by source IP.
+3. Confirm `.env` is mode 600, has no placeholder values, and is not committed.
+4. Deploy the application and run the full ETL before announcing the URL.
+5. Verify `/api/products` returns products with `has_data: true`; an empty
+   catalogue means the initial ETL has not completed.
+6. Run one backup, one isolated restore check, and confirm the archive exists
+   in the private Blob container.
+7. Configure an external availability check for `/health` and Azure Monitor
+   alerts for disk use and VM health.

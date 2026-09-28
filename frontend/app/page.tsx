@@ -25,12 +25,11 @@ export default async function HomePage() {
 
       {products.length === 0 ? (
         <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <p className="text-gray-500 text-sm mb-2">No products loaded yet.</p>
+          <p className="text-gray-700 text-sm font-medium mb-2">
+            Market data is being prepared.
+          </p>
           <p className="text-gray-400 text-xs">
-            Run the ETL pipeline to populate the database:{' '}
-            <code className="bg-gray-100 px-1 py-0.5 rounded">
-              docker-compose exec backend python -m etl.run
-            </code>
+            Please check back later or contact the service administrator.
           </p>
         </div>
       ) : (

@@ -323,6 +323,16 @@ jobs:
     needs: build
     timeout-minutes: 20
 
+    # Placeholders that let `docker compose -f docker-compose.prod.yml config`
+    # resolve, so steps can read the production service definitions.
+    env:
+      BACKEND_IMAGE: afg-market-backend:ci
+      FRONTEND_IMAGE: afg-market-frontend:ci
+      POSTGRES_PASSWORD: ci-not-a-real-password
+      DATABASE_URL: postgresql://postgres:ci-not-a-real-password@db:5432/afg_market
+      COMTRADE_API_KEY: ci-not-a-real-key
+      SITE_ADDRESS: https://afg-market.example.org
+
     services:
       postgres:
         image: postgres:16-alpine
@@ -411,6 +421,7 @@ jobs:
             --add-host=host.docker.internal:host-gateway \
             -p 8001:8000 \
             -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+            -e API_DOCS_ENABLED=false \
             afg-market-backend:ci)
 
           fail_with_logs() {
@@ -448,6 +459,12 @@ jobs:
             || fail_with_logs "GET /api/products returned $API_STATUS, expected 200"
           echo "✓ /api/products queries the migrated schema successfully"
 
+          DOCS_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+            --max-time 10 http://localhost:8001/docs)
+          [ "$DOCS_STATUS" = "404" ] \
+            || fail_with_logs "/docs returned $DOCS_STATUS with API_DOCS_ENABLED=false, expected 404"
+          echo "✓ interactive API docs are disabled in the production configuration"
+
           docker rm -f "$CONTAINER_ID" >/dev/null
 
       # The health endpoint's failure path is what decides whether a bad deploy
@@ -473,12 +490,40 @@ jobs:
           fi
           echo "✓ /health correctly refuses to report healthy without a database"
 
+      # Production runs the frontend with a read-only root filesystem, so any
+      # runtime write outside a tmpfs fails there. The container here gets the
+      # same read_only / tmpfs / cap_drop / security_opt, read from
+      # docker-compose.prod.yml rather than copied, so the two cannot drift and
+      # a missing writable path fails this step instead of production.
       - name: Smoke-test the frontend image
         run: |
           set -euo pipefail
-          CONTAINER_ID=$(docker run -d -p 3001:3000 \
-            -e BACKEND_URL="http://127.0.0.1:8001" \
+          docker compose -f docker-compose.prod.yml config --format json > /tmp/prod-compose.json
+          mapfile -t HARDENING < <(jq -r '.services.frontend
+            | (if .read_only then "--read-only" else empty end),
+              (.tmpfs        // [] | .[] | "--tmpfs=\(.)"),
+              (.cap_drop     // [] | .[] | "--cap-drop=\(.)"),
+              (.cap_add      // [] | .[] | "--cap-add=\(.)"),
+              (.security_opt // [] | .[] | "--security-opt=\(.)")' /tmp/prod-compose.json)
+          echo "Production hardening applied: ${HARDENING[*]}"
+
+          docker network create afg-market-ci >/dev/null
+          BACKEND_ID=$(docker run -d --name afg-market-ci-backend \
+            --network afg-market-ci \
+            --add-host=host.docker.internal:host-gateway \
+            -e DATABASE_URL="postgresql://postgres:postgres@host.docker.internal:5432/afg_market_ci" \
+            afg-market-backend:ci)
+          FRONTEND_ID=$(docker run -d -p 3001:3000 \
+            --network afg-market-ci \
+            "${HARDENING[@]}" \
+            -e BACKEND_URL="http://afg-market-ci-backend:8000" \
             afg-market-frontend:ci)
+
+          cleanup() {
+            docker rm -f "$FRONTEND_ID" "$BACKEND_ID" >/dev/null 2>&1 || true
+            docker network rm afg-market-ci >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
 
           for i in $(seq 1 30); do
             if curl -fsS -o /dev/null http://localhost:3001/ 2>/dev/null; then break; fi
@@ -489,22 +534,37 @@ jobs:
           CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:3001/ || echo 000)
           if [ "$CODE" != "200" ]; then
             echo "::error::the frontend image did not serve / (HTTP $CODE)"
-            docker logs "$CONTAINER_ID" || true
-            docker rm -f "$CONTAINER_ID" >/dev/null 2>&1 || true
+            docker logs "$FRONTEND_ID" || true
+            docker logs "$BACKEND_ID" || true
             exit 1
           fi
-          docker rm -f "$CONTAINER_ID" >/dev/null
           echo "✓ the frontend image boots and serves"
+
+          # The image optimizer is the runtime writer to .next/cache. A failed
+          # cache write still answers 200 -- Next serves the image uncached and
+          # only logs -- so the proof is that the second request is a cache HIT.
+          IMAGE_URL='http://localhost:3001/_next/image?url=%2Ffavicon.ico&w=64&q=75'
+          curl -fsS -o /dev/null --max-time 15 "$IMAGE_URL" \
+            || { echo "::error::/_next/image did not serve"; docker logs "$FRONTEND_ID" || true; exit 1; }
+          CACHE=$(curl -fsS -D - -o /dev/null --max-time 15 "$IMAGE_URL" \
+            | tr -d '\r' | awk -F': ' 'tolower($1) == "x-nextjs-cache" {print $2}')
+          if [ "$CACHE" != "HIT" ]; then
+            echo "::error::a repeated /_next/image request was not served from cache (x-nextjs-cache: ${CACHE:-absent}) — .next/cache is not writable under the production container settings"
+            docker logs "$FRONTEND_ID" || true
+            exit 1
+          fi
+          echo "✓ the image cache is writable under the production container settings"
+
+          if docker logs "$FRONTEND_ID" 2>&1 | grep -E 'EROFS|EACCES|ENOENT|ENOSPC|unhandledRejection'; then
+            echo "::error::the frontend logged filesystem errors under the production container settings"
+            exit 1
+          fi
+          echo "✓ no filesystem errors in the frontend logs"
 
       # The compose file production actually uses. `config` parses it, resolves
       # every interpolation and validates the schema — so a typo or a missing
       # required variable fails here rather than on the VM mid-deploy.
       - name: Validate docker-compose.prod.yml
-        env:
-          BACKEND_IMAGE: afg-market-backend:ci
-          FRONTEND_IMAGE: afg-market-frontend:ci
-          POSTGRES_PASSWORD: ci-not-a-real-password
-          DATABASE_URL: postgresql://postgres:ci-not-a-real-password@db:5432/afg_market
         run: |
           set -euo pipefail
           docker compose -f docker-compose.prod.yml config >/dev/null
