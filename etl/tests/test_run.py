@@ -7,8 +7,9 @@ Failure resilience was previously only exercised by hand (a real ETL run
 that happened to hit a real API error) rather than by a test. Two levels are
 covered here:
 
-  1. Inside run_product(): one HS code's fetch raising shouldn't stop the
-     product's other HS codes, or crash the product outright.
+  1. Inside run_product(): a fetch that still fails after its retries must
+     not crash the product -- and must not let the product be scored on the
+     data that did arrive. The product is skipped and its stored data kept.
   2. Inside main()'s concurrent product loop: one product's run_product()
      call raising shouldn't stop the other products in the same run, or
      crash the process.
@@ -30,29 +31,36 @@ from etl import run as etl_run
 
 
 class TestRunProductHsCodeResilience:
-    def test_one_failing_hs_code_does_not_abort_the_product(self, monkeypatch):
+    @staticmethod
+    def _mirror_row(hs):
+        return pd.DataFrame([{
+            "hs_code": hs, "year": 2024, "importer_code": "699",
+            "importer_name": "India", "trade_value_usd": 1000.0,
+            "trade_quantity": 10.0, "quantity_unit": "kg", "net_weight_kg": 10.0,
+        }])
+
+    @staticmethod
+    def _global_row(hs, years=None):
+        return pd.DataFrame([{
+            "reporterCode": "699", "partnerCode": "0", "year": 2024,
+            "primaryValue": 5000.0, "reporterDesc": "India",
+        }])
+
+    def test_one_failing_fetch_skips_the_product(self, monkeypatch):
         # A product with two HS codes -- config.PRODUCTS doesn't currently
         # have one, but run_product() takes cfg as a plain dict, so this
-        # doesn't need a real config entry to exercise the behavior.
+        # doesn't need a real config entry to exercise the behavior. One
+        # mirror call failing (after its retries) must not crash the product,
+        # nor let it be scored on the other HS code alone.
         cfg = {"codes": ["080211", "080212"], "category": "Test", "description": "test"}
 
         def fake_mirror(hs, years):
             if hs == "080211":
                 raise RuntimeError("simulated Comtrade failure")
-            return pd.DataFrame([{
-                "hs_code": hs, "year": 2024, "importer_code": "699",
-                "importer_name": "India", "trade_value_usd": 1000.0,
-                "trade_quantity": 10.0, "quantity_unit": "kg", "net_weight_kg": 10.0,
-            }])
-
-        def fake_global(hs, years):
-            return pd.DataFrame([{
-                "reporterCode": "699", "partnerCode": "0", "year": 2024,
-                "primaryValue": 5000.0, "reporterDesc": "India",
-            }])
+            return self._mirror_row(hs)
 
         monkeypatch.setattr(etl_run.fetch, "fetch_mirror_exports", fake_mirror)
-        monkeypatch.setattr(etl_run.fetch, "fetch_global_imports", fake_global)
+        monkeypatch.setattr(etl_run.fetch, "fetch_global_imports", self._global_row)
 
         # dry_run=True so this never needs a real DB engine.
         result = etl_run.run_product(
@@ -60,14 +68,40 @@ class TestRunProductHsCodeResilience:
             dry_run=True, market_context={},
         )
 
-        # The product as a whole completed (reached the dry-run exit point,
-        # not an exception), using only the HS code that succeeded.
-        assert result["status"] == "dry_run"
+        # Stopped before the dry-run exit point, i.e. before anything that writes.
+        assert result["status"] == "fetch_failed"
         assert len(result["errors"]) == 1
         assert result["errors"][0]["hs"] == "080211"
         assert result["errors"][0]["stage"] == "fetch_mirror"
 
-    def test_both_hs_codes_failing_is_reported_as_no_data_not_a_crash(self, monkeypatch):
+    def test_failed_fetch_writes_nothing_for_the_product(self, monkeypatch):
+        # The point of skipping: last run's stored data must survive. A lost
+        # mirror call used to rescore every market as if Afghanistan exported
+        # nothing there. Any write after the product row itself fails the test.
+        cfg = {"codes": ["510531"], "category": "Test", "description": "test"}
+
+        def mirror_fails(hs, years):
+            raise RuntimeError("Comtrade request failed after retries")
+
+        class GuardedLoad:
+            def upsert_product(self, engine, **kwargs):
+                return 1
+
+            def __getattr__(self, name):
+                raise AssertionError(f"load.{name} called for a product whose fetch failed")
+
+        monkeypatch.setattr(etl_run, "load", GuardedLoad())
+        monkeypatch.setattr(etl_run.fetch, "fetch_mirror_exports", mirror_fails)
+        monkeypatch.setattr(etl_run.fetch, "fetch_global_imports", self._global_row)
+
+        result = etl_run.run_product(
+            engine=object(), product_name="Processed Cashmere", cfg=cfg,
+            dry_run=False, market_context={},
+        )
+
+        assert result["status"] == "fetch_failed"
+
+    def test_all_fetches_failing_is_reported_not_a_crash(self, monkeypatch):
         cfg = {"codes": ["080211", "080212"], "category": "Test", "description": "test"}
 
         def always_fails(hs, years):
@@ -81,8 +115,23 @@ class TestRunProductHsCodeResilience:
             dry_run=True, market_context={},
         )
 
-        assert result["status"] == "no_data"
+        assert result["status"] == "fetch_failed"
         assert len(result["errors"]) == 4  # 2 HS codes x 2 fetch stages
+
+    def test_genuinely_empty_data_is_still_no_data(self, monkeypatch):
+        # Comtrade answering with no rows (no failure) is a real "no data",
+        # unchanged by the skip rule.
+        cfg = {"codes": ["080211"], "category": "Test", "description": "test"}
+        monkeypatch.setattr(etl_run.fetch, "fetch_mirror_exports", lambda hs, years: pd.DataFrame())
+        monkeypatch.setattr(etl_run.fetch, "fetch_global_imports", lambda hs, years: pd.DataFrame())
+
+        result = etl_run.run_product(
+            engine=None, product_name="Test Product", cfg=cfg,
+            dry_run=True, market_context={},
+        )
+
+        assert result["status"] == "no_data"
+        assert result["errors"] == []
 
 
 class TestMainConcurrentProductResilience:
@@ -124,6 +173,25 @@ class TestMainConcurrentProductResilience:
             etl_run.main()  # must still not raise
 
         assert "0/2 products succeeded" in caplog.text
+
+
+    def test_skipped_products_are_named_with_a_rerun_command(self, monkeypatch, caplog):
+        def fake_run_product(engine, product_name, cfg, dry_run, market_context,
+                              skip_tariffs=False, refresh_cache=False):
+            if product_name == "Cumin Seeds":
+                return {"product": product_name, "status": "fetch_failed",
+                        "errors": [{"hs": "090930", "stage": "fetch_mirror", "error": "x"}]}
+            return {"product": product_name, "status": "success", "errors": []}
+
+        monkeypatch.setattr(etl_run, "run_product", fake_run_product)
+        monkeypatch.setattr(sys, "argv", ["etl.run", "--products", "Saffron", "Cumin Seeds", "--dry-run"])
+
+        with caplog.at_level(logging.INFO, logger="etl.run"):
+            etl_run.main()
+
+        assert "1/2 products succeeded" in caplog.text
+        assert "1 product(s) skipped because Comtrade kept failing" in caplog.text
+        assert 'python -m etl.run --products "Cumin Seeds"' in caplog.text
 
 
 class TestAllMarketCodes:
