@@ -575,11 +575,18 @@ class TestDiscovery:
         assert "description" in step
 
     def test_high_tariff_triggers_tariff_next_step(self, client, seeded_db):
-        # India has 30% tariff in fixtures — should trigger the high-tariff guidance
+        # India has 30% tariff in fixtures — should trigger the high-tariff
+        # guidance. Saffron uses the playbook (backend/playbook/next_steps.yaml).
         r = client.get("/api/discover/091020/markets/699")
-        steps = r.json()["next_steps"]
-        titles = [s["title"] for s in steps]
-        assert any("tariff" in t.lower() for t in titles)
+        body = r.json()
+        tariff = next(s for s in body["next_steps"] if s["key"] == "tariff")
+        assert "30.0%" in tariff["description"]
+        assert "That is high" in tariff["description"]
+        assert tariff["links"][0]["url"] == (
+            "https://globaltradehelpdesk.org/en/export-091020-from-af-to-in/assess-requirements/tariffs"
+        )
+        assert body["next_steps_more"]["url"].endswith("/export-091020-from-af-to-in/market-overview")
+        assert body["next_steps_disclaimer"]
 
     def test_market_profile_404_on_unknown(self, client):
         r = client.get("/api/discover/091020/markets/ZZZZ")

@@ -186,11 +186,20 @@ class DiscoveryResult(BaseModel):
     markets: list[MarketOpportunity]
 
 
+class StepLink(BaseModel):
+    label: str
+    url: str
+
+
 class NextStep(BaseModel):
     order: int
     title: str
     description: str
-    resource_url: str | None = None
+    links: list[StepLink] = []
+    # Facts still being confirmed (with ACCI) -- the app flags the step
+    to_confirm: bool = False
+    # Playbook step id (backend/playbook/next_steps.yaml); None for rule-based steps
+    key: str | None = None
 
 
 class MarketProfile(BaseModel):
@@ -206,6 +215,10 @@ class MarketProfile(BaseModel):
     trade: MarketIndicator | None
     competitors: list[CompetitorRow]
     next_steps: list[NextStep]
+    # Set when the steps come from the playbook: a link to everything for this
+    # product and market, and the "confirm before you ship" note
+    next_steps_more: StepLink | None = None
+    next_steps_disclaimer: str | None = None
 
 
 # Forward reference resolution
