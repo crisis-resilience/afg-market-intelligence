@@ -1,13 +1,15 @@
+import { ToolSteps } from '@/components/ToolChrome'
+
 export default function Loading() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="h-8 w-64 bg-gray-200 rounded animate-pulse mb-2" />
-      <div className="h-4 w-40 bg-gray-100 rounded animate-pulse mb-8" />
-      <div className="space-y-3">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-16 bg-white rounded-xl border border-gray-100 animate-pulse" />
+    <>
+      <ToolSteps current={2} links={['/']} />
+      <div className="bg-ink h-[260px] animate-pulse" />
+      <div className="mx-auto max-w-[1440px] px-5 sm:px-10 xl:px-16 pb-16 -mt-20 flex flex-col gap-3.5" aria-busy="true" aria-label="Loading markets">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-[150px] bg-white border border-line rounded-md animate-pulse" />
         ))}
       </div>
-    </div>
+    </>
   )
 }

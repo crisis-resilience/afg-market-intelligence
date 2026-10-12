@@ -1,20 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getDiscoveryResult } from '@/lib/api'
-import { formatUSD, formatPct } from '@/lib/utils'
+import { formatPct } from '@/lib/utils'
+import { SCORE_DIMENSIONS } from '@/lib/scoring'
 import ScoreBadge from '@/components/ScoreBadge'
 import ScoreBar from '@/components/ScoreBar'
-
-const SCORE_DIMENSIONS = [
-  { key: 'market_size', label: 'Market size', weight: 0.20 },
-  { key: 'market_growth', label: 'Market growth', weight: 0.18 },
-  { key: 'market_quality', label: 'Market quality', weight: 0.13 },
-  { key: 'price_competitiveness', label: 'Price', weight: 0.13 },
-  { key: 'tariff', label: 'Tariff', weight: 0.12 },
-  { key: 'afg_foothold', label: 'Afghan foothold', weight: 0.10 },
-  { key: 'distance', label: 'Proximity', weight: 0.10 },
-  { key: 'language', label: 'Language', weight: 0.04 },
-] as const
+import { Breadcrumb, PortPhoto, ToolSteps } from '@/components/ToolChrome'
 
 export default async function DiscoverPage(props: PageProps<'/discover/[hs_code]'>) {
   const { hs_code } = await props.params
@@ -24,179 +15,118 @@ export default async function DiscoverPage(props: PageProps<'/discover/[hs_code]
   const result = await getDiscoveryResult(hs_code, minScore)
   if (!result) notFound()
 
+  const productName = result.product_name ?? `HS ${result.hs_code}`
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Breadcrumb */}
-      <Link href="/" className="text-xs text-[#0468B1] hover:underline mb-4 inline-block">
-        ← All products
-      </Link>
+    <>
+      <ToolSteps current={2} links={['/']} />
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end gap-4 mb-6">
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900">{result.product_name}</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            HS {result.hs_code} · {result.total_markets_scored} markets scored ·{' '}
-            {result.computed_for_year}
-          </p>
-        </div>
-        <MinScoreFilter current={minScore} hsCode={hs_code} />
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-4 mb-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-green-500 inline-block" /> ≥ 70 High
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-amber-400 inline-block" /> 40–70 Moderate
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-red-400 inline-block" /> &lt; 40 Low
-        </span>
-      </div>
-
-      {result.markets.length === 0 ? (
-        <p className="text-gray-400 text-sm py-12 text-center">
-          No markets match your filter. Try lowering the minimum score.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {result.markets.map((market) => (
-            <div
-              key={market.market_code}
-              className="bg-white rounded-xl border border-gray-200 p-4 hover:border-[#0468B1]/40 hover:shadow-sm transition-all"
-            >
-              <div className="flex flex-col xl:flex-row xl:items-center gap-4">
-                {/* Rank + name + score */}
-                <div className="flex items-center gap-3 min-w-0 xl:w-64 shrink-0">
-                  <span className="text-sm font-bold text-gray-300 w-6 text-right shrink-0">
-                    {market.rank}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm text-gray-900 truncate">
-                      {market.market_name ?? market.market_code}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {market.tariff_rate_pct != null && (
-                        <span className="text-[10px] text-gray-400">
-                          {market.tariff_rate_pct.toFixed(1)}% tariff
-                          {market.context.tariff_year != null &&
-                            market.context.tariff_year !== result.computed_for_year && (
-                              <span
-                                className="text-amber-500 ml-0.5"
-                                title={`Tariff rate is from ${market.context.tariff_year}, not ${result.computed_for_year} -- WITS lags behind trade data.`}
-                              >
-                                ({market.context.tariff_year})
-                              </span>
-                            )}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <ScoreBadge score={market.opportunity_score} />
-                </div>
-
-                {/* Score bars */}
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {SCORE_DIMENSIONS.map((dim) => (
-                    <ScoreBar
-                      key={dim.key}
-                      label={dim.label}
-                      score={market.score_breakdown[dim.key]}
-                      weight={dim.weight}
-                      displayValue={
-                        dim.key === 'tariff' && market.tariff_rate_pct != null
-                          ? `${market.tariff_rate_pct.toFixed(1)}%`
-                          : undefined
-                      }
-                    />
-                  ))}
-                </div>
-
-                {/* Key metrics */}
-                <div className="xl:w-48 shrink-0 text-xs space-y-1.5">
-                  <MetricRow
-                    label="Global imports"
-                    value={formatUSD(market.global_market_size_usd)}
-                    staleYear={
-                      market.trade_data_year != null && market.trade_data_year !== result.computed_for_year
-                        ? market.trade_data_year
-                        : undefined
-                    }
-                  />
-                  <MetricRow
-                    label="Afghan exports"
-                    value={formatUSD(market.afg_export_value_usd)}
-                    staleYear={
-                      market.trade_data_year != null && market.trade_data_year !== result.computed_for_year
-                        ? market.trade_data_year
-                        : undefined
-                    }
-                    lastKnown={
-                      market.afg_export_value_usd == null && market.afg_last_export_year != null
-                        ? { year: market.afg_last_export_year, value: market.afg_last_export_value_usd }
-                        : undefined
-                    }
-                  />
-                  <MetricRow label="CAGR" value={formatPct(market.cagr_pct)} />
-                  <MetricRow
-                    label="Market share"
-                    value={formatPct(market.market_share_pct, 2, false)}
-                  />
-                </div>
-
-                {/* CTA */}
-                <div className="xl:w-28 shrink-0">
-                  <Link
-                    href={`/discover/${hs_code}/markets/${market.market_code}`}
-                    className="block text-center text-xs font-semibold py-2 px-3 rounded-lg border border-[#0468B1] text-[#0468B1] hover:bg-[#0468B1] hover:text-white transition-colors"
-                  >
-                    Full profile →
-                  </Link>
-                </div>
-              </div>
+      {/* Photo banner: title, filter and legend; the market cards overlap its bottom edge */}
+      <section className="relative overflow-hidden bg-ink pb-[100px]">
+        <PortPhoto />
+        <div className="relative mx-auto max-w-[1440px] px-5 sm:px-10 xl:px-16">
+          <div className="pt-12 pb-7 flex flex-col lg:flex-row lg:items-end justify-between gap-6 lg:gap-12">
+            <div className="flex flex-col gap-3 max-w-[760px]">
+              <Breadcrumb trail={[{ label: 'Find your market', href: '/' }, { label: productName }]} />
+              <h1 className="on-photo-strong text-[34px] sm:text-[44px] font-semibold tracking-[-0.028em] leading-[1.08] m-0 text-white">
+                {productName}
+              </h1>
+              <p className="on-photo font-mono text-[15px] text-white m-0">
+                HS {result.hs_code} · {result.total_markets_scored} markets scored · {result.computed_for_year}
+              </p>
             </div>
-          ))}
+            <MinScoreFilter current={minScore} hsCode={hs_code} />
+          </div>
+          <div className="on-photo pb-4 flex flex-wrap items-center gap-x-[22px] gap-y-2 text-[13px] text-white">
+            <LegendDot className="bg-score-high" label="70+ High" />
+            <LegendDot className="bg-score-mid" label="40–70 Moderate" />
+            <LegendDot className="bg-score-low" label="Under 40 Low" />
+          </div>
         </div>
-      )}
-    </div>
+      </section>
+
+      <div className="relative mx-auto max-w-[1440px] px-5 sm:px-10 xl:px-16 pb-16 -mt-20">
+        {result.markets.length === 0 ? (
+          <p className="bg-white border border-line rounded-md p-12 text-center text-muted text-[15px] m-0">
+            No markets match your filter. Try lowering the minimum score.
+          </p>
+        ) : (
+          <ol className="flex flex-col gap-3.5 list-none m-0 p-0">
+            {result.markets.map((market) => (
+                <li
+                  key={market.market_code}
+                  className="bg-white border border-line rounded-md px-6 py-[22px] flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-9"
+                >
+                  {/* Rank, name, score + two key figures. Kept short on purpose:
+                      the full figures are on the market profile. */}
+                  <div className="lg:w-[300px] shrink-0 flex flex-col gap-4">
+                    <div className="flex items-center gap-3.5">
+                      <span className="w-[22px] text-right font-mono text-[22px] font-medium text-grey">{market.rank}</span>
+                      <h2 className="flex-1 min-w-0 text-[17px] font-semibold m-0 truncate">{market.market_name ?? market.market_code}</h2>
+                      <ScoreBadge score={market.opportunity_score} />
+                    </div>
+                    <dl className="grid grid-cols-2 gap-x-[18px] gap-y-2.5 pl-9 m-0">
+                      <Metric
+                        label="Average yearly growth"
+                        value={formatPct(market.cagr_pct)}
+                        title="Average yearly growth of this market's imports of the product, over recent years"
+                      />
+                      <Metric
+                        label="Afghanistan’s share of imports"
+                        value={formatPct(market.market_share_pct, 2, false)}
+                        title="Share of this market's imports of the product that come from Afghanistan"
+                      />
+                    </dl>
+                  </div>
+
+                  {/* The eight score factors */}
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-x-9 gap-y-2.5">
+                    {SCORE_DIMENSIONS.map((dim) => (
+                      <ScoreBar
+                        key={dim.key}
+                        label={dim.short}
+                        score={market.score_breakdown[dim.key]}
+                        displayValue={
+                          dim.key === 'tariff' && market.tariff_rate_pct != null
+                            ? `${market.tariff_rate_pct.toFixed(1)}%`
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+
+                  <div className="lg:w-[200px] shrink-0 flex lg:justify-end">
+                    <Link
+                      href={`/discover/${hs_code}/markets/${market.market_code}`}
+                      className="button-primary button-arrow"
+                      aria-label={`Full profile: ${market.market_name ?? market.market_code}`}
+                    >
+                      Full profile
+                    </Link>
+                  </div>
+                </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </>
   )
 }
 
-function MetricRow({
-  label,
-  value,
-  staleYear,
-  lastKnown,
-}: {
-  label: string
-  value: string
-  staleYear?: number
-  lastKnown?: { year: number; value: number | null }
-}) {
+function LegendDot({ className, label }: { className: string; label: string }) {
   return (
-    <div className="flex justify-between gap-2">
-      <span className="text-gray-400">{label}</span>
-      <span className="font-medium text-gray-700 tabular-nums">
-        {value}
-        {staleYear != null && (
-          <span
-            className="text-amber-500 font-normal ml-1"
-            title={`This market's latest reported data is from ${staleYear} -- Comtrade hasn't published a newer year yet.`}
-          >
-            ({staleYear})
-          </span>
-        )}
-        {lastKnown != null && (
-          <span
-            className="text-gray-400 font-normal ml-1 text-[10px]"
-            title={`Afghanistan has no recorded exports here this year. Last known: ${formatUSD(lastKnown.value)} in ${lastKnown.year}.`}
-          >
-            (last {lastKnown.year}: {formatUSD(lastKnown.value)})
-          </span>
-        )}
-      </span>
+    <span className="inline-flex items-center gap-[7px]">
+      <span className={`w-[11px] h-[11px] rounded-full inline-block ${className}`} aria-hidden="true" />
+      {label}
+    </span>
+  )
+}
+
+function Metric({ label, value, title }: { label: string; value: string; title: string }) {
+  return (
+    <div title={title}>
+      <dt className="text-xs text-muted">{label}</dt>
+      <dd className="m-0 font-mono text-[13.5px] font-medium text-muted tabular-nums">{value}</dd>
     </div>
   )
 }
@@ -209,25 +139,28 @@ function MinScoreFilter({ current, hsCode }: { current?: number; hsCode: string 
     { label: 'Score ≥ 70', value: 70 },
   ]
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="text-gray-400">Filter:</span>
-      {options.map((opt) => {
-        const isActive = (opt.value ?? 0) === (current ?? 0)
-        const href = opt.value ? `/discover/${hsCode}?min_score=${opt.value}` : `/discover/${hsCode}`
-        return (
-          <Link
-            key={opt.label}
-            href={href}
-            className={`px-2.5 py-1 rounded-full border transition-colors ${
-              isActive
-                ? 'bg-[#0468B1] text-white border-[#0468B1]'
-                : 'border-gray-300 text-gray-600 hover:border-[#0468B1] hover:text-[#0468B1]'
-            }`}
-          >
-            {opt.label}
-          </Link>
-        )
-      })}
+    <div className="flex flex-col lg:items-end gap-2.5 shrink-0">
+      <span className="on-photo text-xs font-semibold tracking-[0.06em] uppercase text-white">Show</span>
+      <div className="flex flex-wrap gap-2">
+        {options.map((opt) => {
+          const isActive = (opt.value ?? 0) === (current ?? 0)
+          const href = opt.value ? `/discover/${hsCode}?min_score=${opt.value}` : `/discover/${hsCode}`
+          return (
+            <Link
+              key={opt.label}
+              href={href}
+              aria-current={isActive ? 'true' : undefined}
+              className={`text-sm px-4 py-2 rounded-full border no-underline ${
+                isActive
+                  ? 'bg-undp border-undp text-white font-medium'
+                  : 'bg-white border-line text-muted hover:border-undp hover:text-undp'
+              }`}
+            >
+              {opt.label}
+            </Link>
+          )
+        })}
+      </div>
     </div>
   )
 }

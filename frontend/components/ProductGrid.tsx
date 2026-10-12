@@ -4,10 +4,13 @@ import { useState } from 'react'
 import Link from 'next/link'
 import type { ProductSummary } from '@/lib/types'
 import { formatUSD } from '@/lib/utils'
+import { PortPhoto } from '@/components/ToolChrome'
 
 const ALL = 'All'
 
-export default function ProductGrid({ products }: { products: ProductSummary[] }) {
+// The photo banner holds the search and category filters, so it is drawn
+// here with the grid; `intro` is the page's breadcrumb, title and lead.
+export default function ProductGrid({ products, intro }: { products: ProductSummary[]; intro: React.ReactNode }) {
   const categories = [ALL, ...Array.from(new Set(products.map((p) => p.category))).sort()]
   const [query, setQuery] = useState('')
   const [activeCategory, setActiveCategory] = useState(ALL)
@@ -22,44 +25,76 @@ export default function ProductGrid({ products }: { products: ProductSummary[] }
   })
 
   return (
-    <div>
-      {/* Search + category filter */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <input
-          type="search"
-          placeholder="Search by product name or HS code…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0468B1] bg-white"
-        />
-      </div>
+    <>
+      <section className="relative overflow-hidden bg-ink pb-[110px]">
+        <PortPhoto />
+        <div className="relative mx-auto max-w-[1440px] px-5 sm:px-10 xl:px-16">
+          <div className="pt-12 pb-7">{intro}</div>
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        {categories.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(cat)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              activeCategory === cat
-                ? 'bg-[#0468B1] text-white'
-                : 'bg-white text-gray-600 border border-gray-300 hover:border-[#0468B1] hover:text-[#0468B1]'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
+          {products.length > 0 && (
+            <div className="pb-7 flex flex-col gap-[18px]">
+              {/* Results filter as you type; the button is there for people who expect one */}
+              <form role="search" className="flex items-stretch max-w-[760px]" onSubmit={(e) => e.preventDefault()}>
+                <div className="relative grow">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#55606E" strokeWidth="2" strokeLinecap="square" aria-hidden="true" className="absolute left-4 top-[15px]">
+                    <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    type="search"
+                    aria-label="Search products"
+                    placeholder="Search by product name or HS code…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="block w-full h-12 pl-11 pr-3.5 bg-white text-ink text-base border-2 border-black border-r-0 rounded-none appearance-none placeholder:text-grey focus:outline-0 focus:shadow-[0_0_4px_#1F5A95]"
+                  />
+                </div>
+                <button type="submit" className="button-primary button-arrow h-12">Search</button>
+              </form>
 
-      {filtered.length === 0 && (
-        <p className="text-gray-500 text-sm py-12 text-center">No products match your search.</p>
-      )}
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {categories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    aria-pressed={activeCategory === cat}
+                    onClick={() => setActiveCategory(cat)}
+                    className={`text-sm px-4 py-2 rounded-full border cursor-pointer ${
+                      activeCategory === cat
+                        ? 'bg-undp border-undp text-white font-medium'
+                        : 'bg-white border-line text-muted hover:border-undp hover:text-undp'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+                <span className="on-photo ml-auto font-mono text-[13px] text-white" aria-live="polite">
+                  {filtered.length} {filtered.length === 1 ? 'product' : 'products'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filtered.map((product) => (
-          <ProductCard key={product.id} product={product} />
-        ))}
+      <div className="relative mx-auto max-w-[1440px] px-5 sm:px-10 xl:px-16 pb-16 -mt-[90px]">
+        {products.length === 0 ? (
+          <div className="bg-white border border-line rounded-md p-12 text-center">
+            <p className="text-ink text-[15px] font-medium m-0 mb-2">Market data is being prepared.</p>
+            <p className="text-muted text-sm m-0">Please check back later or contact the service administrator.</p>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white border border-line rounded-md p-12 text-center text-muted text-[15px]">
+            No products match your search.
+          </div>
+        ) : (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 list-none m-0 p-0">
+            {filtered.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </ul>
+        )}
       </div>
-    </div>
+    </>
   )
 }
 
@@ -67,62 +102,52 @@ function ProductCard({ product }: { product: ProductSummary }) {
   const primaryHsCode = product.hs_codes[0]
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col hover:shadow-md hover:border-[#0468B1]/40 transition-all">
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#0468B1] bg-[#E8F2FA] px-2 py-0.5 rounded">
-          {product.category}
-        </span>
+    <li className="bg-white border border-line rounded-md p-[22px] flex flex-col gap-3.5 min-h-[262px]">
+      <div className="flex justify-between items-start gap-2">
+        <span className="text-[11.5px] font-semibold text-undp bg-blue-tint px-[9px] py-[3px] rounded-[3px]">{product.category}</span>
         {product.has_data ? (
-          <span className="text-[10px] text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
-            Data available
-          </span>
+          <span className="text-[11.5px] font-medium text-green bg-green-tint px-[9px] py-[3px] rounded-[3px] whitespace-nowrap">Data available</span>
         ) : (
-          <span className="text-[10px] text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded">
-            No data yet
-          </span>
+          <span className="text-[11.5px] text-muted bg-soft px-[9px] py-[3px] rounded-[3px] whitespace-nowrap">No data yet</span>
         )}
       </div>
 
-      <h3 className="font-semibold text-sm text-gray-900 mb-1 leading-snug">{product.name}</h3>
-      <p className="text-xs text-gray-400 mb-3">HS {product.hs_codes.join(', ')}</p>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-[19px] font-semibold tracking-[-0.01em] leading-[1.25] min-h-[2.5em] m-0">{product.name}</h2>
+        <p className="font-mono text-[12.5px] text-muted m-0">HS {product.hs_codes.join(', ')}</p>
+      </div>
 
-      {product.has_data && (
-        <div className="text-xs text-gray-600 space-y-1 mb-4">
+      {product.has_data && (product.total_export_value_usd != null || product.top_market_name) && (
+        <dl className="flex flex-col gap-[7px] text-[13.5px] border-t border-soft pt-3.5 m-0">
           {product.total_export_value_usd != null && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Afghan exports</span>
-              <span className="font-medium">{formatUSD(product.total_export_value_usd)}</span>
+            <div className="flex justify-between gap-2.5">
+              <dt className="text-muted">Afghan exports{product.last_year ? ` (${product.last_year})` : ''}</dt>
+              <dd className="m-0 font-medium text-right font-mono">{formatUSD(product.total_export_value_usd)}</dd>
             </div>
           )}
           {product.top_market_name && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Top market</span>
-              <span className="font-medium truncate ml-2">{product.top_market_name}</span>
+            <div className="flex justify-between gap-2.5">
+              <dt className="text-muted">Top market</dt>
+              <dd className="m-0 font-medium text-right">{product.top_market_name}</dd>
             </div>
           )}
-          {product.last_year && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Year</span>
-              <span className="font-medium">{product.last_year}</span>
-            </div>
-          )}
-        </div>
+        </dl>
       )}
 
       <div className="mt-auto">
         {product.has_data ? (
           <Link
             href={`/discover/${primaryHsCode}`}
-            className="block w-full text-center text-xs font-semibold py-2 px-4 rounded-lg bg-[#0468B1] text-white hover:bg-[#035891] transition-colors"
+            className="flex items-center justify-center gap-2 h-11 rounded bg-undp text-white text-[14.5px] font-medium no-underline hover:bg-undp-dark"
           >
-            Discover markets →
+            Discover markets <span aria-hidden="true">→</span>
           </Link>
         ) : (
-          <span className="block w-full text-center text-xs py-2 px-4 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed">
-            No data available
+          <span className="flex items-center justify-center h-11 rounded bg-soft text-muted text-sm cursor-not-allowed">
+            No data available yet
           </span>
         )}
       </div>
-    </div>
+    </li>
   )
 }
