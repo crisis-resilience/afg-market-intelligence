@@ -75,3 +75,8 @@ docs/INDICATOR_INVENTORY.xlsx
 # not part of the application.
 scratch/
 
+
+# Design-tool exports (.dc.html) used as references when building site/ and
+# frontend/. Large (photos embedded) and inside docs/, which GitHub Pages may
+# publish -- keep them local.
+docs/website_pages/
