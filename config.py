@@ -211,6 +211,29 @@ NUMERIC_TO_ISO3: dict[str, str] = {
     "834": "TZA", "858": "URY", "887": "YEM", "894": "ZMB",
 }
 
+# ISO3 -> ISO 3166 alpha-2, for every market in NUMERIC_TO_ISO3. External
+# tools key their pages on the 2-letter code (e.g. the Global Trade Helpdesk
+# links built from backend/playbook/next_steps.yaml). Taken from the World
+# Bank country list (api.worldbank.org/v2/country, `iso2Code`) -- the same
+# source NUMERIC_TO_ISO3 is verified against; tests/test_config.py checks
+# the two tables stay in step.
+ISO3_TO_ISO2: dict[str, str] = {
+    "ARE": "AE", "ARG": "AR", "ARM": "AM", "AUS": "AU", "AUT": "AT", "AZE": "AZ", "BEL": "BE", "BGD": "BD",
+    "BGR": "BG", "BHR": "BH", "BIH": "BA", "BLR": "BY", "BRA": "BR", "BRN": "BN", "BTN": "BT", "CAN": "CA",
+    "CHE": "CH", "CHN": "CN", "CIV": "CI", "CYP": "CY", "CZE": "CZ", "DEU": "DE", "DNK": "DK", "DZA": "DZ",
+    "EGY": "EG", "ESP": "ES", "EST": "EE", "ETH": "ET", "FIN": "FI", "FRA": "FR", "GAB": "GA", "GBR": "GB",
+    "GEO": "GE", "GRC": "GR", "GTM": "GT", "HKG": "HK", "HRV": "HR", "HUN": "HU", "IDN": "ID", "IND": "IN",
+    "IRL": "IE", "IRN": "IR", "IRQ": "IQ", "ISL": "IS", "ISR": "IL", "ITA": "IT", "JOR": "JO", "JPN": "JP",
+    "KAZ": "KZ", "KEN": "KE", "KGZ": "KG", "KOR": "KR", "KWT": "KW", "LAO": "LA", "LBN": "LB", "LBR": "LR",
+    "LKA": "LK", "LTU": "LT", "LUX": "LU", "LVA": "LV", "MAR": "MA", "MDA": "MD", "MDG": "MG", "MDV": "MV",
+    "MEX": "MX", "MKD": "MK", "MLT": "MT", "MMR": "MM", "MNE": "ME", "MNG": "MN", "MOZ": "MZ", "MUS": "MU",
+    "MYS": "MY", "NGA": "NG", "NLD": "NL", "NOR": "NO", "NPL": "NP", "NZL": "NZ", "OMN": "OM", "PAK": "PK",
+    "PER": "PE", "PHL": "PH", "POL": "PL", "PRT": "PT", "PSE": "PS", "QAT": "QA", "ROU": "RO", "RUS": "RU",
+    "RWA": "RW", "SAU": "SA", "SEN": "SN", "SGP": "SG", "SRB": "RS", "SVK": "SK", "SVN": "SI", "SWE": "SE",
+    "THA": "TH", "TJK": "TJ", "TKM": "TM", "TUN": "TN", "TUR": "TR", "TZA": "TZ", "UGA": "UG", "UKR": "UA",
+    "URY": "UY", "USA": "US", "UZB": "UZ", "VNM": "VN", "YEM": "YE", "ZAF": "ZA", "ZMB": "ZM",
+}
+
 # ── Geographic distance from Kabul, Afghanistan ─────────────────────────────────
 # Great-circle capital-to-capital distance (km), from CEPII's GeoDist dataset
 # (Mayer & Zignago, 2011): https://www.cepii.fr/cepii/en/bdd_modele/bdd_modele_item.asp?id=6

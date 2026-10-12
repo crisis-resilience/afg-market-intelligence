@@ -1,0 +1,174 @@
+# =============================================================================
+# Recommended next steps — the playbook
+# =============================================================================
+# The "Recommended next steps" on each market profile in the app are built
+# from this file. Edit the wording or links here; no code change is needed.
+# After editing, restart the backend (or rebuild its image) and run the tests:
+#     python -m pytest backend/tests/test_next_steps_playbook.py
+#
+# PLACEHOLDERS — written in {curly braces} inside `text`, `title`, `label`
+# and `url`, and filled in for each product and market:
+#     {product}       product name, e.g. "Saffron"
+#     {product_lc}    the same in lower case, for use mid-sentence
+#     {market}        destination country, e.g. "France"
+#     {markets}       the same with an apostrophe-s: "France’s"
+#     {hs6}           6-digit HS code, e.g. 091020
+#     {iso2}          destination's 2-letter code in lower case, e.g. fr
+#     {tariff}        the market's tariff on this product, e.g. "18.0%"
+#     {tariff_type}   "MFN" (the standard rate for all WTO members) or
+#                     "preferential"
+#
+# CONDITIONS — an `extra` sentence or a link can carry `when:`. Every
+# condition listed must hold for it to show. Available conditions:
+#     product_type: [plant, animal, textile, mineral]   (see product_types)
+#     eu: true / false                 destination is an EU member state
+#     tariff_known: true / false       a tariff rate is on record
+#     tariff_at_least: 15              tariff rate is 15% or more
+#     tariff_below: 5                  tariff rate is under 5%
+#     near: true                       within overland range (under 3,000 km)
+#     price_below_market: true         Afghan unit price is below the
+#                                      market's average price
+#
+# to_confirm: true marks a step whose facts are still being checked (with
+# ACCI). The app shows it with a "Being confirmed" note.
+#
+# Links go to the Global Trade Helpdesk first: its pages open directly on the
+# exporter's product and destination, with no login. An original source is
+# used only where the Helpdesk has nothing for that step. Check every link by
+# hand for a product before adding it to `enabled_products`.
+# =============================================================================
+
+# Products whose market profiles use this playbook. Every other product keeps
+# the previous automatic steps until its wording and links have been reviewed.
+enabled_products:
+  - Saffron
+
+# What kind of goods a product is — decides which documents step 1 asks for.
+# Set per category; `product_overrides` wins for individual products.
+product_types:
+  Spices & Herbs: plant
+  Tree Nuts: plant
+  Dried Fruits: plant
+  Fresh Fruits: plant
+  Oilseeds: plant
+  Carpets & Textiles: textile
+  Luxury Fibres: textile
+  Minerals & Stones: mineral
+product_overrides:
+  Raw Cashmere: animal
+  Karakul Sheepskin: animal
+
+# EU member states (2-letter codes), for the EU-only lines below.
+eu_members: [AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV,
+             LT, LU, MT, NL, PL, PT, RO, SK, SI, ES, SE]
+
+# Shown under the steps.
+disclaimer: >-
+  This guidance is a starting point. Requirements change — confirm them with
+  ACCI or an advisor at the Centre before you ship.
+
+# Shown after the steps: everything for this product and market in one place.
+more_link:
+  label: See everything for {product} to {market} on the Global Trade Helpdesk
+  url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/market-overview
+
+steps:
+  - key: documents
+    title: Get your export documents in Afghanistan
+    text: >-
+      Before you ship, you need an export licence and a certificate of origin.
+    extra:
+      - when: {product_type: [plant]}
+        text: >-
+          {product} is a plant product, so you also need a phytosanitary
+          (plant health) certificate.
+      - when: {product_type: [animal]}
+        text: >-
+          {product} is an animal product, so you also need a veterinary
+          (animal health) certificate.
+      - text: >-
+          Ask ACCI or an advisor at the Centre to walk you through the offices
+          and steps.
+    links:
+      - label: Afghanistan Chamber of Commerce and Investment (ACCI)
+        url: https://acci.org.af/en/contact-us.html
+
+  - key: tariff
+    title: Check the import duty you will pay
+    text: >-
+      Find out what duty {market} charges on {product_lc} from Afghanistan, so
+      you can price your offer correctly.
+    extra:
+      - when: {tariff_known: true}
+        text: >-
+          On record: {tariff} ({tariff_type} rate).
+      - when: {tariff_at_least: 15}
+        text: >-
+          That is high. Build it into your price, and ask your buyer whether a
+          lower preferential rate applies to Afghan goods.
+      - when: {eu: true}
+        text: >-
+          As a least-developed country, Afghanistan can export most products to
+          the EU duty-free under the “Everything But Arms” scheme. To claim it
+          you need proof that your goods originate in Afghanistan — ask ACCI
+          whether that is a certificate of origin or registration in the EU's
+          REX system.
+    links:
+      - label: Tariffs for {product} in {market}
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/assess-requirements/tariffs
+      - label: EU “Everything But Arms” scheme
+        url: https://trade.ec.europa.eu/access-to-markets/en/content/everything-arms-eba
+        when: {eu: true}
+      - label: EU exporter registration (REX)
+        url: https://trade.ec.europa.eu/access-to-markets/en/content/registered-exporter-system
+        when: {eu: true}
+
+  - key: requirements
+    title: Check the rules your product must meet
+    text: >-
+      {market} sets rules that {product_lc} must meet before it can enter —
+      for example on labelling, packaging, testing and inspection. Check each
+      one, and make sure you can prove you meet it.
+    extra:
+      - when: {product_type: [plant]}
+        text: >-
+          For food products, pay particular attention to limits on pesticide
+          residues and contaminants, and to plant health rules.
+    links:
+      - label: Requirements for {product} in {market}
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/assess-requirements/regulations
+      - label: New and upcoming rules
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/assess-requirements/regulations/notified-regulatory-changes
+
+  - key: transport
+    title: Arrange transport
+    text: >-
+      Choose a freight forwarder that ships to {market} and can handle customs
+      clearance there.
+    extra:
+      - when: {near: true}
+        text: >-
+          {market} is within overland range — ask forwarders to compare road
+          or rail with air freight.
+    links:
+      - label: Freight forwarders for {market}
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/identify-partners/freight-forwarders
+
+  - key: buyers
+    title: Find buyers and get paid
+    text: >-
+      Look for companies that trade {product_lc} in {market}, and contact trade
+      promotion organisations that can introduce you. Agree payment terms
+      early — ask your bank about letters of credit.
+    extra:
+      - when: {price_below_market: true}
+        text: >-
+          Your price is below the market average here — lead with it when you
+          approach buyers, together with your quality certificates.
+    links:
+      - label: Companies trading {product_lc} in {market}
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/identify-partners/business-directory
+      - label: Trade promotion organisations
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/identify-partners/trade-promotion-organisations
+      - label: Trade finance providers
+        url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/identify-partners/trade-finance-providers

@@ -9,6 +9,7 @@ import pytest
 
 from config import (
     DISTANCE_FROM_KABUL_KM,
+    ISO3_TO_ISO2,
     LANGUAGE_SIMILARITY,
     NUMERIC_TO_ISO3,
     OPPORTUNITY_SCORE_WEIGHTS,
@@ -189,6 +190,13 @@ class TestProducts:
 
 
 class TestGeographyLookups:
+    def test_every_market_has_a_two_letter_code(self):
+        # The next-steps links (backend/playbook/next_steps.yaml) are keyed on
+        # it; a market missing here silently loses its Global Trade Helpdesk links.
+        for code, iso3 in NUMERIC_TO_ISO3.items():
+            iso2 = ISO3_TO_ISO2.get(iso3)
+            assert iso2 and len(iso2) == 2 and iso2.isalpha() and iso2.isupper(), f"{code} {iso3}: {iso2!r}"
+
     def test_distance_keys_are_numeric_country_codes(self):
         for code, km in DISTANCE_FROM_KABUL_KM.items():
             assert COUNTRY_CODE_PATTERN.match(code), f"invalid distance key {code!r}"

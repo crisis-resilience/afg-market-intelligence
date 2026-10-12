@@ -163,6 +163,19 @@ def run_product(
 
     global_df = pd.concat(global_frames, ignore_index=True) if global_frames else pd.DataFrame()
 
+    # A fetch that still failed after its retries (see fetch.fetch_*) is not
+    # "no data". Carrying on with the calls that did succeed would score the
+    # product on part of its data and overwrite last run's figures -- a lost
+    # mirror call, for one, rescores every market as if Afghanistan exported
+    # nothing there. So nothing is written for this product this run: the
+    # previously stored data stays, and the product is reported as failed.
+    if errors:
+        logger.error(
+            f"  {tag} {len(errors)} Comtrade fetch(es) failed after retries — "
+            "skipping this product; its previously stored data is kept"
+        )
+        return {"product": product_name, "status": "fetch_failed", "errors": errors}
+
     if mirror_df.empty and global_df.empty:
         logger.warning(f"  {tag} No data fetched — skipping")
         return {"product": product_name, "status": "no_data", "errors": errors}
@@ -392,6 +405,13 @@ def main():
     successes = sum(1 for r in results if r["status"] == "success")
     logger.info(f"\n{'─'*60}")
     logger.info(f"ETL complete: {successes}/{len(results)} products succeeded")
+    skipped = sorted(r["product"] for r in results if r["status"] == "fetch_failed")
+    if skipped:
+        quoted = " ".join(f'"{name}"' for name in skipped)
+        logger.warning(
+            f"  {len(skipped)} product(s) skipped because Comtrade kept failing; their previous data is kept: "
+            f"{', '.join(skipped)}\n  Re-run just these with: python -m etl.run --products {quoted}"
+        )
     if all_errors:
         logger.warning(f"  {len(all_errors)} errors logged (see etl_run.log for details)")
 

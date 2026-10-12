@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.country_names import resolve_country_name
+from backend.services.next_steps import build_next_steps
 
 
 def get_ranked_markets(
@@ -24,7 +25,7 @@ def get_ranked_markets(
     if product is None:
         return None
 
-    product_id, product_name = product
+    product_id, product_name, _category = product
 
     params: dict = {"product_id": product_id}
     score_filter = ""
@@ -142,7 +143,7 @@ def get_market_profile(db: Session, hs_code: str, market_code: str) -> dict | No
     if product is None:
         return None
 
-    product_id, product_name = product
+    product_id, product_name, product_category = product
 
     sql = text("""
         SELECT
@@ -251,22 +252,41 @@ def get_market_profile(db: Session, hs_code: str, market_code: str) -> dict | No
             },
         },
         "competitors": competitors,
-        "next_steps": _build_next_steps(row, market_code),
+        **_next_steps_for(row, product_name, product_category, hs_code, market_code, market_name),
     }
 
 
+def _next_steps_for(row, product_name, category, hs_code, market_code, market_name) -> dict:
+    """Playbook steps when the product is enabled there, otherwise the older rule-based ones."""
+    playbook = build_next_steps(
+        row, product_name=product_name, category=category, hs_code=hs_code,
+        market_code=market_code, market_name=market_name,
+    )
+    if playbook is not None:
+        return {
+            "next_steps": playbook["steps"],
+            "next_steps_more": playbook["more_link"],
+            "next_steps_disclaimer": playbook["disclaimer"],
+        }
+    legacy = []
+    for step in _build_next_steps(row, market_code):
+        url = step.pop("resource_url", None)
+        legacy.append({**step, "links": [{"label": url.split("//", 1)[-1].rstrip("/"), "url": url}] if url else []})
+    return {"next_steps": legacy, "next_steps_more": None, "next_steps_disclaimer": None}
+
+
 def _find_product(db: Session, hs_code: str):
-    """Return (product_id, product_name) for any product whose hs_codes contains hs_code."""
+    """Return (product_id, product_name, category) for any product whose hs_codes contains hs_code."""
     from sqlalchemy import String, cast
 
     from backend.models import Product as ProductModel
     clean = hs_code.replace(".", "").strip()
     row = (
-        db.query(ProductModel.id, ProductModel.name)
+        db.query(ProductModel.id, ProductModel.name, ProductModel.category)
         .filter(cast(ProductModel.hs_codes, String).contains(clean))
         .first()
     )
-    return (row[0], row[1]) if row else None
+    return (row[0], row[1], row[2]) if row else None
 
 
 def _f(v) -> float | None:

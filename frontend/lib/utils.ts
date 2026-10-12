@@ -24,25 +24,38 @@ export function formatScore(value: number | null | undefined): string {
   return value.toFixed(1)
 }
 
+// Score scale used everywhere: high (70+), moderate (40–70), low (under 40).
+export type ScoreLevel = 'high' | 'moderate' | 'low'
+
+export function scoreLevel(score: number | null | undefined): ScoreLevel | null {
+  if (score == null) return null
+  if (score >= 70) return 'high'
+  if (score >= 40) return 'moderate'
+  return 'low'
+}
+
+function byLevel(score: number | null | undefined, classes: Record<ScoreLevel, string>, none: string): string {
+  const level = scoreLevel(score)
+  return level ? classes[level] : none
+}
+
+/** Text colour for a score number. */
 export function scoreColor(score: number | null | undefined): string {
-  if (score == null) return 'text-gray-400'
-  if (score >= 70) return 'text-green-600'
-  if (score >= 40) return 'text-amber-600'
-  return 'text-red-500'
+  return byLevel(score, { high: 'text-green', moderate: 'text-amber-dark', low: 'text-danger' }, 'text-muted')
 }
 
+/** Background + text colour for a score badge. */
 export function scoreBg(score: number | null | undefined): string {
-  if (score == null) return 'bg-gray-100 text-gray-500'
-  if (score >= 70) return 'bg-green-100 text-green-800'
-  if (score >= 40) return 'bg-amber-100 text-amber-800'
-  return 'bg-red-100 text-red-700'
+  return byLevel(
+    score,
+    { high: 'bg-green-tint text-green', moderate: 'bg-amber-tint text-amber-dark', low: 'bg-danger-tint text-danger' },
+    'bg-soft text-muted',
+  )
 }
 
+/** Fill colour for a score bar. */
 export function scoreBarColor(score: number | null | undefined): string {
-  if (score == null) return 'bg-gray-300'
-  if (score >= 70) return 'bg-green-500'
-  if (score >= 40) return 'bg-amber-400'
-  return 'bg-red-400'
+  return byLevel(score, { high: 'bg-score-high', moderate: 'bg-score-mid', low: 'bg-score-low' }, 'bg-grey')
 }
 
 export function rankOrdinal(n: number): string {

@@ -1,22 +1,79 @@
 @import "tailwindcss";
 
+/* Colours, type and buttons shared with the public website (site/css/site.css),
+   so the website and the app read as one service. */
 @theme inline {
+  --color-ink: #232E3D;
+  --color-muted: #55606E;
+  --color-grey: #A9B1B7;
+  --color-line: #D4D6D8;
+  --color-soft: #EDEFF0;
+  --color-paper: #F7F7F7;
   --color-undp: #0468B1;
-  --color-undp-dark: #035999;
-  --color-undp-light: #E8F2FA;
-  --color-background: #F7F7F7;
-  --color-foreground: #1A1A1A;
-  --font-sans: Arial, Helvetica, sans-serif;
+  --color-undp-dark: #1F5A95;
+  --color-blue-tint: #B5D5F5;
+  --color-blue-wash: #EAF2FA;   /* light band background (market profile) */
+  --color-red: #D12800;
+  --color-red-light: #EE402D;
+  --color-amber: #B8690F;
+  --color-amber-dark: #8A5A10;
+  --color-amber-tint: #FBF1E1;
+  --color-danger: #B3261E;
+  --color-danger-tint: #FBE9E7;
+  --color-green: #2C6A49;
+  --color-green-tint: #E6F2EA;
+  /* Score scale: high (70+), moderate (40–70), low (under 40) */
+  --color-score-high: #3E8E5E;
+  --color-score-mid: #D8923C;
+  --color-score-low: #D0584E;
+
+  --font-sans: var(--font-plex-sans), system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
+  background: var(--color-paper);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Score bar animation */
-@keyframes grow {
-  from { width: 0 }
-  to { width: var(--bar-width) }
+:focus-visible { outline: 2px solid var(--color-undp); outline-offset: 2px; }
+
+/* UNDP Design System 2.0.2 (MIT licence) — primary button with arrow */
+.button-primary {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 16px 24px;
+  background-color: var(--color-red);
+  border: none;
+  font-size: 16px; font-weight: 700; line-height: 1; letter-spacing: .03em; text-transform: uppercase;
+  color: #FFFFFF; text-decoration: none; white-space: nowrap;
+  cursor: pointer;
 }
+.button-primary:hover { background-color: var(--color-red-light); color: #FFFFFF; }
+.button-primary:focus-visible { box-shadow: 0 0 4px var(--color-undp-dark); outline: 0; }
+.button-primary.button-arrow::after {
+  content: ""; width: 13px; height: 20px; margin-left: 12px; transition: transform .2s ease;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='20' viewBox='0 0 13 20' fill='none'%3E%3Cpath d='M1 1L11 9.99781L1 19' stroke='%23232E3D' stroke-width='2'/%3E%3C/svg%3E") no-repeat left center;
+}
+.button-primary.button-arrow:hover::after { transform: translate(70%, 0); }
+
+/* Text on the photo banners */
+.on-photo { text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
+.on-photo-strong { text-shadow: 0 1px 12px rgba(0, 0, 0, .35); }
+
+/* UNDP Design System 2.0.3 (MIT licence) — frosted background: a photo under
+   a blurred, 90%-opaque light layer. Content placed in the element sits above
+   the layer (z-index 10). */
+.frosted-background { position: relative; overflow: hidden; }
+.frosted-background > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; opacity: .5; }
+.frosted-background::before {
+  content: ""; position: absolute; inset: 0; z-index: 9;
+  background: hsla(0, 0%, 97%, .9);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+@supports (-webkit-backdrop-filter: none) or (backdrop-filter: none) {
+  .frosted-background > img { opacity: 1; }
+}
+.frosted-background > :not(img) { position: relative; z-index: 10; }

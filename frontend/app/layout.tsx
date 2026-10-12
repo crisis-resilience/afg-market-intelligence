@@ -1,22 +1,28 @@
 import type { Metadata } from 'next'
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
-import Header from '@/components/Header'
+import SiteHeader from '@/components/SiteHeader'
+import SiteFooter from '@/components/SiteFooter'
+import { siteUrl } from '@/lib/site'
+
+// Self-hosted by next/font, so the browser never calls Google (the Caddy CSP
+// only allows fonts from this origin).
+const plexSans = IBM_Plex_Sans({ subsets: ['latin'], variable: '--font-plex-sans' })
+const plexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-plex-mono' })
 
 export const metadata: Metadata = {
-  title: 'AFG Market Diversification Tool',
+  title: 'Find your market — MSME Support Centre',
   description:
     'Identify and rank the best new export markets for Afghan products — powered by UN Comtrade, World Bank, and WITS data.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-screen flex flex-col bg-[#F7F7F7] text-[#1A1A1A]">
-        <Header />
+    <html lang="en" className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}>
+      <body className="min-h-screen flex flex-col">
+        <SiteHeader siteUrl={siteUrl()} />
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-gray-200 py-4 text-center text-xs text-gray-400 bg-white">
-          Data: UN Comtrade (mirror statistics) · World Bank WDI/WGI · WITS tariffs
-        </footer>
+        <SiteFooter />
       </body>
     </html>
   )

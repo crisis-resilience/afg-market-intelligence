@@ -20,6 +20,7 @@ def _isolate_wits_disk_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(fetch, "_WITS_CACHE_PATH", tmp_path / "wits_tariffs.json")
     monkeypatch.setattr(fetch, "_wits_disk_cache", {})
     monkeypatch.setattr(fetch, "_wits_cache", {})
+    monkeypatch.setattr(fetch, "_wits_disk_cache_writable", True)
 
 
 def _wits_payload(products: dict[str, float], reporter="356", partner="000"):
@@ -242,6 +243,30 @@ class TestCachedWitsTariffs:
 
         assert first == second == {}
         assert len(calls) == 1  # not retried -- this was a real answer
+
+    def test_unwritable_disk_cache_does_not_fail_the_lookup(self, tmp_path, monkeypatch, caplog):
+        # In the container the default cache path is not writable. Saving
+        # must not turn a successful WITS fetch into a failed lookup -- that
+        # dropped every market's tariff and scored it neutral. The rate is
+        # still returned, the in-memory cache still works, and the warning is
+        # logged once rather than per fetch.
+        blocker = tmp_path / "not-a-directory"
+        blocker.write_text("")
+        monkeypatch.setattr(fetch, "_WITS_CACHE_PATH", blocker / "wits_tariffs.json")
+        calls = []
+
+        def fake(reporter, partner, year):
+            calls.append((reporter, partner, year))
+            return {"080620": 5.0}
+
+        with caplog.at_level("WARNING", logger=fetch.logger.name), patch.object(fetch, "_fetch_wits_tariffs", side_effect=fake):
+            first = fetch._cached_wits_tariffs("356", "000", 2022)
+            again = fetch._cached_wits_tariffs("356", "000", 2022)
+            other = fetch._cached_wits_tariffs("356", "000", 2021)
+
+        assert first == again == other == {"080620": 5.0}
+        assert len(calls) == 2  # 2022 served from memory the second time
+        assert sum("not writable" in r.message for r in caplog.records) == 1
 
 
 class TestFetchTariffRates:

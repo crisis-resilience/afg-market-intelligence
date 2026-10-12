@@ -1,0 +1,10 @@
+# Cloudflare Pages redirects — https://developers.cloudflare.com/pages/configuration/redirects/
+#
+# Every "Find your market" / Market Intelligence Tool link on the website points
+# at /app, and this line sends it on to the app. It is the ONLY place the app's
+# address is written: when the real domain is known, change it here and nothing
+# else needs editing.
+#
+# 302 (temporary) rather than 301 so browsers don't cache it — the address can
+# change without stale redirects lingering in visitors' browsers.
+/app  https://app.example.org/  302

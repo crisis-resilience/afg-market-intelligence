@@ -121,6 +121,11 @@ class TestNormaliseMirror:
         assert (out["hs_code"] == "080620").all()
 
 
+def _no_retry_wait(monkeypatch, fn):
+    """Skip tenacity's real waits between attempts (seconds each) in tests."""
+    monkeypatch.setattr(fn.retry, "sleep", lambda *_: None)
+
+
 class TestCallComtrade:
     """
     Tests of _call_comtrade itself -- the one chokepoint every Comtrade
@@ -149,9 +154,19 @@ class TestCallComtrade:
         assert captured["customsCode"] == "C00"
         assert captured["motCode"] == "0"
 
-    def test_none_response_returns_empty_dataframe(self, monkeypatch):
+    def test_none_response_raises_instead_of_reading_as_no_data(self, monkeypatch):
+        # comtradeapicall returns None for a failed request (429 rate limit,
+        # 5xx, network error) -- not for "no data", which is an empty
+        # DataFrame. Reading None as empty made a rate-limited call look like
+        # "Afghanistan exported nothing" and the product was rescored on it.
         monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
         monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: None)
+        with pytest.raises(fetch.ComtradeRequestError):
+            fetch._call_comtrade("2024", "091020", "M", None, "4")
+
+    def test_empty_dataframe_response_is_a_real_empty_answer(self, monkeypatch):
+        monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: pd.DataFrame())
         result = fetch._call_comtrade("2024", "091020", "M", None, "4")
         assert isinstance(result, pd.DataFrame)
         assert result.empty
@@ -194,7 +209,7 @@ class TestFetchMirrorExports:
 
     def test_empty_response_returns_empty_dataframe(self, monkeypatch):
         monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
-        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: None)
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: pd.DataFrame())
         result = fetch.fetch_mirror_exports("091020", [2024])
         assert result.empty
 
@@ -210,8 +225,29 @@ class TestFetchMirrorExports:
         assert set(result["importer_code"]) == {"699", "586"}
         assert result["trade_value_usd"].sum() == pytest.approx(150_000.0)
 
-    def test_retries_twice_before_giving_up(self):
-        assert fetch.fetch_mirror_exports.retry.stop.max_attempt_number == 2
+    def test_retries_five_times_before_giving_up(self):
+        assert fetch.fetch_mirror_exports.retry.stop.max_attempt_number == 5
+
+    def test_failed_request_is_retried_then_succeeds(self, monkeypatch):
+        # A rate-limited call (None) followed by a real answer: the retry
+        # waits and asks again, and the data comes through.
+        _no_retry_wait(monkeypatch, fetch.fetch_mirror_exports)
+        monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
+        responses = iter([None, None, pd.DataFrame([_raw_mirror_row()])])
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: next(responses))
+        result = fetch.fetch_mirror_exports("091020", [2024])
+        assert len(result) == 1
+
+    def test_request_failing_every_time_raises_not_empty(self, monkeypatch):
+        # After the last attempt the failure reaches etl/run.py as an error,
+        # never as an empty "no data" result.
+        _no_retry_wait(monkeypatch, fetch.fetch_mirror_exports)
+        monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
+        calls = []
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: calls.append(1))
+        with pytest.raises(fetch.ComtradeRequestError):
+            fetch.fetch_mirror_exports("091020", [2024])
+        assert len(calls) == 5
 
 
 class TestFetchGlobalImports:
@@ -265,12 +301,33 @@ class TestFetchGlobalImports:
 
     def test_empty_response_returns_empty_dataframe(self, monkeypatch):
         monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
-        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: None)
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: pd.DataFrame())
         result = fetch.fetch_global_imports("091020", [2024])
         assert result.empty
 
-    def test_retries_twice_before_giving_up(self):
-        assert fetch.fetch_global_imports.retry.stop.max_attempt_number == 2
+    def test_retries_five_times_before_giving_up(self):
+        assert fetch.fetch_global_imports.retry.stop.max_attempt_number == 5
+
+    def test_failed_request_is_retried_then_succeeds(self, monkeypatch):
+        # A rate-limited call (None) followed by a real answer: the retry
+        # waits and asks again, and the data comes through.
+        _no_retry_wait(monkeypatch, fetch.fetch_global_imports)
+        monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
+        responses = iter([None, None, pd.DataFrame([_raw_mirror_row()])])
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: next(responses))
+        result = fetch.fetch_global_imports("091020", [2024])
+        assert len(result) == 1
+
+    def test_request_failing_every_time_raises_not_empty(self, monkeypatch):
+        # After the last attempt the failure reaches etl/run.py as an error,
+        # never as an empty "no data" result.
+        _no_retry_wait(monkeypatch, fetch.fetch_global_imports)
+        monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
+        calls = []
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: calls.append(1))
+        with pytest.raises(fetch.ComtradeRequestError):
+            fetch.fetch_global_imports("091020", [2024])
+        assert len(calls) == 5
 
     def test_quantity_unit_resolved_from_code_when_abbr_blank(self, monkeypatch):
         # The real-world case (see etl/fetch.py's _load_qty_unit_labels

@@ -1,40 +1,27 @@
 import { getProducts } from '@/lib/api'
 import ProductGrid from '@/components/ProductGrid'
+import { Breadcrumb, ToolSteps } from '@/components/ToolChrome'
 
 export default async function HomePage() {
   const products = await getProducts()
 
-  const withData = products.filter((p) => p.has_data).length
+  const intro = (
+    <div className="flex flex-col gap-3 max-w-[760px]">
+      <Breadcrumb trail={[{ label: 'Find your market' }]} />
+      <h1 className="on-photo-strong text-[34px] sm:text-[44px] font-semibold tracking-[-0.028em] leading-[1.08] m-0 text-white">
+        Find your market
+      </h1>
+      <p className="on-photo text-[17.5px] leading-[1.5] text-white m-0">
+        Choose a product to discover and rank the best new export markets for it — scored on market size, growth,
+        tariffs, logistics and more.
+      </p>
+    </div>
+  )
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-          Afghan Export Market Discovery
-        </h1>
-        <p className="text-gray-500 text-sm">
-          Select a product to discover and rank the best new export markets — scored across market
-          size, growth, tariffs, logistics, and more.
-        </p>
-        {products.length > 0 && (
-          <p className="text-xs text-gray-400 mt-2">
-            {products.length} products · {withData} with scored markets
-          </p>
-        )}
-      </div>
-
-      {products.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <p className="text-gray-700 text-sm font-medium mb-2">
-            Market data is being prepared.
-          </p>
-          <p className="text-gray-400 text-xs">
-            Please check back later or contact the service administrator.
-          </p>
-        </div>
-      ) : (
-        <ProductGrid products={products} />
-      )}
-    </div>
+    <>
+      <ToolSteps current={1} />
+      <ProductGrid products={products} intro={intro} />
+    </>
   )
 }

@@ -49,8 +49,8 @@ def _get_api_key() -> str | None:
     return key
 
 
-class ComtradeRateLimitError(Exception):
-    pass
+class ComtradeRequestError(Exception):
+    """Comtrade didn't answer: rate limit (429), server error, bad key, network failure."""
 
 
 def _call_comtrade(
@@ -100,8 +100,17 @@ def _call_comtrade(
     )
     time.sleep(_API_DELAY)
 
+    # comtradeapicall never raises: on any non-200 reply (429 rate limit, 5xx,
+    # 401) or network error it prints the response body and returns None,
+    # while a real "no data" answer comes back as an empty DataFrame. Treating
+    # None as empty made a rate-limited call look like "Afghanistan exported
+    # nothing" and the product was rescored on that. Raise instead, so the
+    # fetch_* retry waits and asks again.
     if response is None:
-        return pd.DataFrame()
+        raise ComtradeRequestError(
+            f"Comtrade request failed for HS {hs_code} ({flow_code}, period {period}); "
+            "its response is printed above"
+        )
     if isinstance(response, pd.DataFrame):
         return response if not response.empty else pd.DataFrame()
     if isinstance(response, list):
@@ -110,9 +119,11 @@ def _call_comtrade(
 
 
 @retry(
-    retry=retry_if_exception_type((ComtradeRateLimitError, ConnectionError, TimeoutError)),
-    wait=wait_exponential(multiplier=1, min=2, max=16),
-    stop=stop_after_attempt(2),
+    # Rate limits ask for a wait of a few seconds; waits of 5, 5, 8, 16s
+    # (about half a minute in all) ride out a burst without stalling the run.
+    retry=retry_if_exception_type((ComtradeRequestError, ConnectionError, TimeoutError)),
+    wait=wait_exponential(multiplier=2, min=5, max=60),
+    stop=stop_after_attempt(5),
     reraise=True,
 )
 def fetch_mirror_exports(hs_code: str, years: list[int]) -> pd.DataFrame:
@@ -145,9 +156,11 @@ def fetch_mirror_exports(hs_code: str, years: list[int]) -> pd.DataFrame:
 
 
 @retry(
-    retry=retry_if_exception_type((ComtradeRateLimitError, ConnectionError, TimeoutError)),
-    wait=wait_exponential(multiplier=1, min=2, max=16),
-    stop=stop_after_attempt(2),
+    # Rate limits ask for a wait of a few seconds; waits of 5, 5, 8, 16s
+    # (about half a minute in all) ride out a burst without stalling the run.
+    retry=retry_if_exception_type((ComtradeRequestError, ConnectionError, TimeoutError)),
+    wait=wait_exponential(multiplier=2, min=5, max=60),
+    stop=stop_after_attempt(5),
     reraise=True,
 )
 def fetch_global_imports(hs_code: str, years: list[int]) -> pd.DataFrame:
@@ -369,9 +382,18 @@ _wits_cache: dict[tuple[str, str, int], dict[str, float]] = {}
 # downloaded recently (each one costs 30-60s against WITS). Entries expire
 # after _WITS_CACHE_TTL so an update WITS publishes upstream is still picked
 # up automatically within that window, rather than being cached forever.
-_WITS_CACHE_PATH = Path(__file__).parent / ".cache" / "wits_tariffs.json"
+#
+# The disk copy is best-effort, like the ETL log file (see etl/run.py): in the
+# container the code directory is root-owned and the process runs as an
+# unprivileged user (and in production the filesystem is read-only), so the
+# default path can't be written. A failed save used to propagate out of the
+# lookup and count as a failed WITS fetch -- every market lost its tariff and
+# scored neutral. Now a failed save warns once and the run keeps the in-memory
+# cache. WITS_CACHE_PATH overrides the location (e.g. a mounted volume).
+_WITS_CACHE_PATH = Path(os.getenv("WITS_CACHE_PATH") or Path(__file__).parent / ".cache" / "wits_tariffs.json")
 _WITS_CACHE_TTL = timedelta(days=7)
 _wits_disk_cache_lock = threading.Lock()
+_wits_disk_cache_writable = True
 
 
 def _load_wits_disk_cache() -> dict:
@@ -386,11 +408,22 @@ def _load_wits_disk_cache() -> dict:
 
 
 def _save_wits_disk_cache(cache: dict) -> None:
-    _WITS_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = _WITS_CACHE_PATH.with_suffix(".tmp")
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(cache, f)
-    tmp_path.replace(_WITS_CACHE_PATH)  # atomic replace, safe if a run is killed mid-write
+    """Persist the cache to disk if possible; never fails the caller."""
+    global _wits_disk_cache_writable
+    if not _wits_disk_cache_writable:
+        return
+    try:
+        _WITS_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = _WITS_CACHE_PATH.with_suffix(".tmp")
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(cache, f)
+        tmp_path.replace(_WITS_CACHE_PATH)  # atomic replace, safe if a run is killed mid-write
+    except OSError as exc:
+        _wits_disk_cache_writable = False
+        logger.warning(
+            f"WITS disk cache not writable ({_WITS_CACHE_PATH}: {exc}); "
+            "caching in memory for this run only. Set WITS_CACHE_PATH to a writable location to keep it."
+        )
 
 
 _wits_disk_cache = _load_wits_disk_cache()

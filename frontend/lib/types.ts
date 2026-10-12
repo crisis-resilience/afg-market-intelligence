@@ -103,11 +103,20 @@ export interface CompetitorRow {
   market_share_pct: number | null
 }
 
+export interface StepLink {
+  label: string
+  url: string
+}
+
 export interface NextStep {
   order: number
   title: string
   description: string
-  resource_url: string | null
+  links: StepLink[]
+  /** Facts still being confirmed (with ACCI) */
+  to_confirm: boolean
+  /** Playbook step id; null for the older rule-based steps */
+  key: string | null
 }
 
 export interface MarketProfile {
@@ -122,4 +131,8 @@ export interface MarketProfile {
   trade: MarketIndicator | null
   competitors: CompetitorRow[]
   next_steps: NextStep[]
+  /** Everything for this product and market on the Global Trade Helpdesk (playbook steps only) */
+  next_steps_more: StepLink | null
+  /** "Confirm before you ship" note (playbook steps only) */
+  next_steps_disclaimer: string | null
 }

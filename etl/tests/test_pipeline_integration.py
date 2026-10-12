@@ -119,7 +119,9 @@ class TestFetchTransformLoadPipeline:
         # must flow through as "no rows to score", not an exception -- the
         # same real-world case etl/run.py's "no_data" status exists to handle.
         monkeypatch.setattr(fetch.time, "sleep", lambda *_: None)
-        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: None)
+        # A real "no data" answer is an empty DataFrame; None means the
+        # request failed (see fetch._call_comtrade) and would raise.
+        monkeypatch.setattr(fetch.comtradeapicall, "getFinalData", lambda **kw: pd.DataFrame())
 
         years = [2024]
         mirror_df = fetch.fetch_mirror_exports("091020", years)
