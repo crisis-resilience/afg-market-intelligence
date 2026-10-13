@@ -144,7 +144,7 @@ class TestEdgeCases:
         assert result["more_link"] is None
         assert _step(result, "tariff")["links"] == []
         # links that don't need the country code stay
-        assert _urls(_step(result, "documents")) == ["https://acci.org.af/en/contact-us.html"]
+        assert _urls(_step(result, "documents")) == ["https://acci.org.af/en/"]
 
     def test_unknown_tariff_skips_the_on_record_line(self):
         assert "On record" not in _step(_saffron("251", "France"), "tariff")["description"]
@@ -160,3 +160,57 @@ class TestEdgeCases:
         docs = _step(result, "documents")
         assert "veterinary" in docs["description"]
         assert "phytosanitary" not in docs["description"]
+
+
+class TestProductTypeLines:
+    """Each product type gets its own step 3 line (and minerals a step 4 one), and only its own."""
+
+    LINES = {
+        "plant": "pesticide residues",
+        "textile": "fibre content",
+        "animal": "cleaned or treated",
+        "mineral": "heavy or fragile",
+    }
+
+    def _build(self, monkeypatch, product, category, hs):
+        book = copy.deepcopy(load_playbook())
+        book["enabled_products"] = [product]
+        monkeypatch.setattr(next_steps, "load_playbook", lambda: book)
+        return build_next_steps(
+            _row(), product_name=product, category=category,
+            hs_code=hs, market_code="251", market_name="France",
+        )
+
+    @pytest.mark.parametrize("product, category, hs, ptype", [
+        ("Knotted Carpets", "Carpets & Textiles", "570110", "textile"),
+        ("Cashmere Sweaters", "Luxury Fibres", "611012", "textile"),
+        ("Karakul Sheepskin", "Luxury Fibres", "410510", "animal"),
+        ("Talc", "Minerals & Stones", "252620", "mineral"),
+        ("Dried Figs", "Dried Fruits", "080420", "plant"),
+    ])
+    def test_requirements_line_matches_product_type(self, monkeypatch, product, category, hs, ptype):
+        rules = _step(self._build(monkeypatch, product, category, hs), "requirements")["description"]
+        for other, phrase in self.LINES.items():
+            assert (phrase in rules) == (other == ptype), f"{product}: {other} line"
+
+    def test_only_minerals_get_the_heavy_freight_line(self, monkeypatch):
+        stone = _step(self._build(monkeypatch, "Talc", "Minerals & Stones", "252620"), "transport")
+        carpet = _step(self._build(monkeypatch, "Knotted Carpets", "Carpets & Textiles", "570110"), "transport")
+        assert "Stone is heavy" in stone["description"]
+        assert "Stone is heavy" not in carpet["description"]
+
+
+class TestBatchOne:
+    def test_spices_and_herbs_are_enabled(self):
+        enabled = set(load_playbook()["enabled_products"])
+        assert {"Cumin Seeds", "Fenugreek", "Asafoetida", "Liquorice Root", "Liquorice Extract"} <= enabled
+
+    def test_cumin_gets_plant_guidance_and_its_own_links(self):
+        result = build_next_steps(
+            _row(), product_name="Cumin Seeds", category="Spices & Herbs",
+            hs_code="090931", market_code="586", market_name="Pakistan",
+        )
+        assert "phytosanitary" in _step(result, "documents")["description"]
+        assert _urls(_step(result, "tariff")) == [
+            "https://globaltradehelpdesk.org/en/export-090931-from-af-to-pk/assess-requirements/tariffs"
+        ]

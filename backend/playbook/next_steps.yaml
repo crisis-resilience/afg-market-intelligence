@@ -42,6 +42,12 @@
 # the previous automatic steps until its wording and links have been reviewed.
 enabled_products:
   - Saffron
+  # Batch 1 (2026-10-13): other spices & herbs
+  - Cumin Seeds
+  - Fenugreek
+  - Asafoetida
+  - Liquorice Root
+  - Liquorice Extract
 
 # What kind of goods a product is — decides which documents step 1 asks for.
 # Set per category; `product_overrides` wins for individual products.
@@ -91,7 +97,7 @@ steps:
           and steps.
     links:
       - label: Afghanistan Chamber of Commerce and Investment (ACCI)
-        url: https://acci.org.af/en/contact-us.html
+        url: https://acci.org.af/en/
 
   - key: tariff
     title: Check the import duty you will pay
@@ -134,6 +140,21 @@ steps:
         text: >-
           For food products, pay particular attention to limits on pesticide
           residues and contaminants, and to plant health rules.
+      - when: {product_type: [textile]}
+        text: >-
+          For carpets and textiles, check the rules on labelling (fibre
+          content, country of origin) and on dyes and chemicals used in
+          production.
+      - when: {product_type: [animal]}
+        text: >-
+          For skins and raw animal fibres, expect animal health rules: a
+          veterinary certificate and, in some markets, proof that the goods
+          were cleaned or treated.
+      - when: {product_type: [mineral]}
+        text: >-
+          For stone and minerals, check what you must declare about the
+          material and its origin, and the packaging rules for heavy or
+          fragile shipments.
     links:
       - label: Requirements for {product} in {market}
         url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/assess-requirements/regulations
@@ -150,6 +171,10 @@ steps:
         text: >-
           {market} is within overland range — ask forwarders to compare road
           or rail with air freight.
+      - when: {product_type: [mineral]}
+        text: >-
+          Stone is heavy: ask forwarders to compare sea or rail freight for
+          large orders.
     links:
       - label: Freight forwarders for {market}
         url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/identify-partners/freight-forwarders
