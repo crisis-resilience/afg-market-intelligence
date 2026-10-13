@@ -6,7 +6,7 @@
 // go to DEFAULT_SITE_URL — change that here when the real domain is known.
 //
 // Read on the server at request time, so the same built image works with any
-// address. Client components get it as a prop rather than calling this.
+// address -- call it from server components only (the browser can't see it).
 const DEFAULT_SITE_URL = 'https://example.org'
 
 export function siteUrl(): string {
