@@ -214,3 +214,11 @@ class TestBatchOne:
         assert _urls(_step(result, "tariff")) == [
             "https://globaltradehelpdesk.org/en/export-090931-from-af-to-pk/assess-requirements/tariffs"
         ]
+
+
+class TestBatchTwo:
+    def test_tree_nuts_and_dried_fruits_are_enabled(self):
+        enabled = set(load_playbook()["enabled_products"])
+        batch = {name for name, cfg in PRODUCTS.items() if cfg["category"] in ("Tree Nuts", "Dried Fruits")}
+        assert len(batch) == 11
+        assert batch <= enabled

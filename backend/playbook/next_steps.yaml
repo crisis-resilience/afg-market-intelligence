@@ -48,6 +48,18 @@ enabled_products:
   - Asafoetida
   - Liquorice Root
   - Liquorice Extract
+  # Batch 2 (2026-10-13): tree nuts & dried fruits
+  - Almonds In-Shell
+  - Almonds Shelled
+  - Walnuts In-Shell
+  - Walnuts Shelled
+  - Pistachios In-Shell
+  - Pistachios Shelled
+  - Pine Nuts
+  - Dried Grapes (Raisins)
+  - Dried Apricots
+  - Dried Figs
+  - Dried Pomegranate
 
 # What kind of goods a product is — decides which documents step 1 asks for.
 # Set per category; `product_overrides` wins for individual products.
