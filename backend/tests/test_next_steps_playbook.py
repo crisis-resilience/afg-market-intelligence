@@ -102,7 +102,8 @@ class TestSaffronToFrance:
         assert "Everything But Arms" in tariff["description"]
         assert any("everything-arms-eba" in u for u in _urls(tariff))
         assert any("registered-exporter-system" in u for u in _urls(tariff))
-        assert "On record: 0.0% (MFN rate)." in tariff["description"]
+        assert "today's rate on the Global Trade Helpdesk" in tariff["description"]
+        assert "%" not in tariff["description"]  # no WITS figure quoted
 
     def test_far_market_has_no_overland_line(self, result):
         assert "overland" not in _step(result, "transport")["description"]
@@ -119,8 +120,12 @@ class TestSaffronToIndia:
         assert "Everything But Arms" not in tariff["description"]
         assert _urls(tariff) == [GTH + "in/assess-requirements/tariffs"]
 
-    def test_high_tariff_line(self, result):
-        assert "That is high" in _step(result, "tariff")["description"]
+    def test_no_duty_figure_even_when_ours_is_high(self, result):
+        # Our 30% is a WITS average and may be out of date; step 2 sends the
+        # exporter to the exact current rate instead of quoting it.
+        description = _step(result, "tariff")["description"]
+        assert "30" not in description
+        assert "lower preferential rate" in description
 
     def test_near_market_mentions_overland(self, result):
         assert "within overland range" in _step(result, "transport")["description"]
@@ -149,7 +154,7 @@ class TestEdgeCases:
         assert _urls(_step(result, "documents")) == ["https://acci.org.af/en/"]
 
     def test_unknown_tariff_skips_the_on_record_line(self):
-        assert "On record" not in _step(_saffron("251", "France"), "tariff")["description"]
+        assert "%" not in _step(_saffron("251", "France"), "tariff")["description"]
 
     def test_animal_product_asks_for_veterinary_certificate(self, monkeypatch):
         book = copy.deepcopy(load_playbook())

@@ -151,17 +151,17 @@ steps:
 
   - key: tariff
     title: Check the import duty you will pay
+    # No duty figure here on purpose: ours is the WITS average of the
+    # standard (MFN) rate across the product's tariff lines, often a few
+    # years old, so it can differ from what the exporter will actually pay.
+    # The Helpdesk tariff page has the exact, current rate.
     text: >-
       Find out what duty {market} charges on {product_lc} from Afghanistan, so
-      you can price your offer correctly.
+      you can price your offer correctly. Check the exact duty for your
+      product and today's rate on the Global Trade Helpdesk. Build the duty
+      into your price, and ask your buyer whether a lower preferential rate
+      applies to Afghan goods.
     extra:
-      - when: {tariff_known: true}
-        text: >-
-          On record: {tariff} ({tariff_type} rate).
-      - when: {tariff_at_least: 15}
-        text: >-
-          That is high. Build it into your price, and ask your buyer whether a
-          lower preferential rate applies to Afghan goods.
       - when: {eu: true}
         text: >-
           As a least-developed country, Afghanistan can export most products to
