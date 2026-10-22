@@ -131,19 +131,31 @@ export default async function MarketProfilePage(
                 footer={<YearNote year={tradeYear} current={year} />}
               />
               <StatCard
-                label="Market growth"
-                info={`Average yearly growth (CAGR) of ${markets} imports of ${product} over the period shown.`}
+                // Growth here is of Afghanistan's own exports to this market,
+                // not the market's total imports (docs/INDICATOR_INVENTORY.xlsx:
+                // cagr_pct, score_market_growth). Empty when Afghanistan exported
+                // here in fewer than two years.
+                label="Afghan export growth"
+                info={`Average yearly growth (CAGR) of Afghanistan's exports of ${product} to ${market} over the period shown. Feeds the "Market growth" part of the score.`}
                 icon={<TrendIcon />}
                 value={formatPct(trade?.growth.cagr_pct)}
-                description={growthPeriod ? `Average growth per year, ${growthPeriod}` : 'Average growth per year'}
+                description={
+                  trade?.growth.cagr_pct == null
+                    ? `Not enough years of Afghan exports to ${market} to calculate growth`
+                    : `Average yearly growth of Afghanistan's exports to ${market}${growthPeriod ? `, ${growthPeriod}` : ''}`
+                }
                 footer={growthPeriod && <span className="text-xs text-muted">{growthPeriod}</span>}
               />
               <StatCard
                 label="Year-on-year"
-                info={`Change in ${markets} imports of ${product} compared with the year before.`}
+                info={`Change in Afghanistan's exports of ${product} to ${market} compared with the year before.`}
                 icon={<BarsIcon />}
                 value={formatPct(trade?.growth.yoy_growth_pct)}
-                description={`Change in ${markets} imports compared with the year before`}
+                description={
+                  trade?.growth.yoy_growth_pct == null
+                    ? `Not enough years of Afghan exports to ${market} to compare`
+                    : `Change in Afghanistan's exports to ${market} compared with the year before`
+                }
                 footer={<YearNote year={trade?.growth.last_year ?? null} current={year} />}
               />
             </CardGrid>
