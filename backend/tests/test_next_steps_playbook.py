@@ -222,3 +222,44 @@ class TestBatchTwo:
         batch = {name for name, cfg in PRODUCTS.items() if cfg["category"] in ("Tree Nuts", "Dried Fruits")}
         assert len(batch) == 11
         assert batch <= enabled
+
+
+class TestBatchThree:
+    def test_fresh_fruits_and_oilseeds_are_enabled(self):
+        enabled = set(load_playbook()["enabled_products"])
+        batch = {name for name, cfg in PRODUCTS.items() if cfg["category"] in ("Fresh Fruits", "Oilseeds")}
+        assert len(batch) == 9
+        assert batch <= enabled
+
+
+class TestPerishable:
+    def _transport(self, product, category, hs):
+        result = build_next_steps(
+            _row(), product_name=product, category=category,
+            hs_code=hs, market_code="784", market_name="United Arab Emirates",
+        )
+        return _step(result, "transport")["description"]
+
+    def test_fresh_fruit_gets_the_cold_chain_line(self):
+        assert "refrigerated transport" in self._transport("Fresh Grapes", "Fresh Fruits", "080610")
+
+    def test_frozen_and_dried_products_do_not(self):
+        assert "refrigerated transport" not in self._transport("Mulberries (Prepared/Frozen)", "Fresh Fruits", "081120")
+        assert "refrigerated transport" not in self._transport("Dried Figs", "Dried Fruits", "080420")
+
+    def test_perishable_products_exist(self):
+        for name in load_playbook()["perishable_products"]:
+            assert name in PRODUCTS, name
+
+
+class TestCountryNamesInSentences:
+    def test_names_that_take_the(self):
+        result = _saffron("826", "United Kingdom", distance_km=1000)
+        assert "ships to the United Kingdom" in _step(result, "transport")["description"]
+        assert _step(result, "requirements")["description"].startswith("The United Kingdom sets rules")
+        assert _step(result, "transport")["description"].count("The United Kingdom is within overland range") == 1
+        assert result["more_link"]["label"] == "See everything for Saffron to the United Kingdom on the Global Trade Helpdesk"
+
+    def test_other_names_are_unchanged(self):
+        result = _saffron("251", "France")
+        assert _step(result, "requirements")["description"].startswith("France sets rules")

@@ -208,6 +208,8 @@ class MarketProfile(BaseModel):
     product_name: str | None
     market_code: str
     market_name: str | None
+    # The name as it reads mid-sentence: "the United Kingdom", "France"
+    market_name_in_text: str | None = None
     computed_for_year: int | None = None
     opportunity_score: float | None
     score_breakdown: ScoreBreakdown

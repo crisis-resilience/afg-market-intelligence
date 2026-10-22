@@ -269,3 +269,20 @@ def _clean_candidate(value: Any) -> str | None:
     if text.isdigit():
         return None
     return text
+
+
+# Country names that take "the" in running text ("exports to the United
+# Kingdom", not "to United Kingdom"). Titles and lists keep the bare name.
+_NAMES_WITH_THE = {
+    "Bahamas", "Central African Republic", "Comoros", "Czech Republic", "Dominican Republic",
+    "Gambia", "Maldives", "Marshall Islands", "Netherlands", "Philippines", "Russian Federation",
+    "Seychelles", "Solomon Islands", "United Arab Emirates", "United Kingdom", "United States",
+}
+
+
+def name_in_sentence(name: str | None) -> str | None:
+    """The country name as it reads mid-sentence: "the United Kingdom", "France"."""
+    if not name:
+        return name
+    return f"the {name}" if name in _NAMES_WITH_THE else name
+
