@@ -5,7 +5,7 @@ Market discovery service — serves the opportunity scoring / ranking queries.
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from backend.country_names import resolve_country_name
+from backend.country_names import name_in_sentence, resolve_country_name
 from backend.services.next_steps import build_next_steps
 
 
@@ -200,6 +200,7 @@ def get_market_profile(db: Session, hs_code: str, market_code: str) -> dict | No
         "product_name": product_name,
         "market_code": market_code,
         "market_name": market_name,
+        "market_name_in_text": name_in_sentence(market_name),
         "computed_for_year": row["computed_for_year"],
         "opportunity_score": _f(row["opportunity_score"]),
         "score_breakdown": {

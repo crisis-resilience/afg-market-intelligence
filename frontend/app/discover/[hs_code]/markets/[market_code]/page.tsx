@@ -29,6 +29,7 @@ const MAIN_BARRIER_BELOW = 40
 const SCORE_ACCENT = { high: 'border-score-high', moderate: 'border-score-mid', low: 'border-score-low' } as const
 
 const possessive = (name: string) => (name.endsWith('s') ? `${name}’` : `${name}’s`)
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
 export default async function MarketProfilePage(
   props: PageProps<'/discover/[hs_code]/markets/[market_code]'>,
@@ -37,8 +38,13 @@ export default async function MarketProfilePage(
   const profile = await getMarketProfile(hs_code, market_code)
   if (!profile) notFound()
 
-  const market = profile.market_name ?? market_code
+  // `name` is the bare country name for titles and the breadcrumb; `market`
+  // reads mid-sentence ("the United Kingdom"), `Market` starts a sentence.
+  const name = profile.market_name ?? market_code
+  const market = profile.market_name_in_text ?? name
+  const Market = capitalise(market)
   const markets = possessive(market)
+  const Markets = capitalise(markets)
   const productName = profile.product_name ?? `HS ${hs_code}`
   const product = profile.product_name?.toLowerCase() ?? 'this product'
   const year = profile.computed_for_year
@@ -83,11 +89,11 @@ export default async function MarketProfilePage(
               trail={[
                 { label: 'Find your market', href: '/' },
                 { label: productName, href: `/discover/${hs_code}` },
-                { label: market },
+                { label: name },
               ]}
             />
             <h1 className="on-photo-strong text-[40px] sm:text-[56px] font-semibold tracking-[-0.028em] leading-[1.05] m-0 text-white">
-              {market}
+              {name}
             </h1>
             <p className="on-photo text-lg leading-[1.5] text-white m-0">
               {productName} · <span className="font-mono text-base">HS {hs_code}</span>
@@ -114,14 +120,14 @@ export default async function MarketProfilePage(
               How much {market} buys, how fast its demand is growing, and how Afghanistan already performs there.
             </p>
 
-            <GroupLabel onPhoto>{market} as a buyer</GroupLabel>
+            <GroupLabel onPhoto>{Market} as a buyer</GroupLabel>
             <CardGrid cols={3}>
               <StatCard
                 label="Market size"
                 info={`Total value of ${product} that ${market} imported from all countries (UN Comtrade).`}
                 icon={<GlobeIcon />}
                 value={formatUSD(trade?.global_market_size_usd)}
-                description={`${markets} total imports of ${product} from all countries`}
+                description={`${Markets} total imports of ${product} from all countries`}
                 footer={<YearNote year={tradeYear} current={year} />}
               />
               <StatCard

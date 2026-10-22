@@ -10,8 +10,11 @@
 # and `url`, and filled in for each product and market:
 #     {product}       product name, e.g. "Saffron"
 #     {product_lc}    the same in lower case, for use mid-sentence
-#     {market}        destination country, e.g. "France"
-#     {markets}       the same with an apostrophe-s: "France’s"
+#     {market}        destination country as it reads mid-sentence, e.g.
+#                     "France", "the United Kingdom"
+#     {Market}        the same, capitalised — use it to start a sentence
+#                     ("The Netherlands sets rules…")
+#     {markets}       with an apostrophe-s: "France’s", "the Netherlands’"
 #     {hs6}           6-digit HS code, e.g. 091020
 #     {iso2}          destination's 2-letter code in lower case, e.g. fr
 #     {tariff}        the market's tariff on this product, e.g. "18.0%"
@@ -28,6 +31,8 @@
 #     near: true                       within overland range (under 3,000 km)
 #     price_below_market: true         Afghan unit price is below the
 #                                      market's average price
+#     perishable: true                 product is listed under
+#                                      perishable_products
 #
 # to_confirm: true marks a step whose facts are still being checked (with
 # ACCI). The app shows it with a "Being confirmed" note.
@@ -42,6 +47,34 @@
 # the previous automatic steps until its wording and links have been reviewed.
 enabled_products:
   - Saffron
+  # Batch 1 (2026-10-13): other spices & herbs
+  - Cumin Seeds
+  - Fenugreek
+  - Asafoetida
+  - Liquorice Root
+  - Liquorice Extract
+  # Batch 2 (2026-10-13): tree nuts & dried fruits
+  - Almonds In-Shell
+  - Almonds Shelled
+  - Walnuts In-Shell
+  - Walnuts Shelled
+  - Pistachios In-Shell
+  - Pistachios Shelled
+  - Pine Nuts
+  - Dried Grapes (Raisins)
+  - Dried Apricots
+  - Dried Figs
+  - Dried Pomegranate
+  # Batch 3 (2026-10-13): fresh fruits & oilseeds
+  - Mulberries (Fresh)
+  - Mulberries (Prepared/Frozen)
+  - Fresh Grapes
+  - Fresh Pomegranate
+  - Watermelons
+  - Melons
+  - Apricots
+  - Sesame Seeds
+  - Flaxseed / Linseed
 
 # What kind of goods a product is — decides which documents step 1 asks for.
 # Set per category; `product_overrides` wins for individual products.
@@ -57,6 +90,15 @@ product_types:
 product_overrides:
   Raw Cashmere: animal
   Karakul Sheepskin: animal
+
+# Products that spoil quickly in transit — they get a cold-chain line in step 4.
+perishable_products:
+  - Mulberries (Fresh)
+  - Fresh Grapes
+  - Fresh Pomegranate
+  - Watermelons
+  - Melons
+  - Apricots
 
 # EU member states (2-letter codes), for the EU-only lines below.
 eu_members: [AT, BE, BG, HR, CY, CZ, DK, EE, FI, FR, DE, GR, HU, IE, IT, LV,
@@ -91,7 +133,7 @@ steps:
           and steps.
     links:
       - label: Afghanistan Chamber of Commerce and Investment (ACCI)
-        url: https://acci.org.af/en/contact-us.html
+        url: https://acci.org.af/en/
 
   - key: tariff
     title: Check the import duty you will pay
@@ -126,7 +168,7 @@ steps:
   - key: requirements
     title: Check the rules your product must meet
     text: >-
-      {market} sets rules that {product_lc} must meet before it can enter —
+      {Market} sets rules that {product_lc} must meet before it can enter —
       for example on labelling, packaging, testing and inspection. Check each
       one, and make sure you can prove you meet it.
     extra:
@@ -134,6 +176,21 @@ steps:
         text: >-
           For food products, pay particular attention to limits on pesticide
           residues and contaminants, and to plant health rules.
+      - when: {product_type: [textile]}
+        text: >-
+          For carpets and textiles, check the rules on labelling (fibre
+          content, country of origin) and on dyes and chemicals used in
+          production.
+      - when: {product_type: [animal]}
+        text: >-
+          For skins and raw animal fibres, expect animal health rules: a
+          veterinary certificate and, in some markets, proof that the goods
+          were cleaned or treated.
+      - when: {product_type: [mineral]}
+        text: >-
+          For stone and minerals, check what you must declare about the
+          material and its origin, and the packaging rules for heavy or
+          fragile shipments.
     links:
       - label: Requirements for {product} in {market}
         url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/assess-requirements/regulations
@@ -148,8 +205,16 @@ steps:
     extra:
       - when: {near: true}
         text: >-
-          {market} is within overland range — ask forwarders to compare road
+          {Market} is within overland range — ask forwarders to compare road
           or rail with air freight.
+      - when: {product_type: [mineral]}
+        text: >-
+          Stone is heavy: ask forwarders to compare sea or rail freight for
+          large orders.
+      - when: {perishable: true}
+        text: >-
+          Fresh fruit spoils quickly: ask forwarders about refrigerated
+          transport and the fastest route.
     links:
       - label: Freight forwarders for {market}
         url: https://globaltradehelpdesk.org/en/export-{hs6}-from-af-to-{iso2}/identify-partners/freight-forwarders

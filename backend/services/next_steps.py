@@ -16,15 +16,16 @@ from typing import Any
 
 import yaml
 
+from backend.country_names import name_in_sentence
 from config import ISO3_TO_ISO2, NUMERIC_TO_ISO3
 
 PLAYBOOK_PATH = Path(__file__).resolve().parent.parent / "playbook" / "next_steps.yaml"
 
 # Placeholders the playbook may use (documented at the top of the YAML file)
-PLACEHOLDERS = {"product", "product_lc", "market", "markets", "hs6", "iso2", "tariff", "tariff_type"}
+PLACEHOLDERS = {"product", "product_lc", "market", "Market", "markets", "hs6", "iso2", "tariff", "tariff_type"}
 
 # Conditions the playbook may use in `when:` (also documented there)
-CONDITIONS = {"product_type", "eu", "tariff_known", "tariff_at_least", "tariff_below", "near", "price_below_market"}
+CONDITIONS = {"product_type", "eu", "tariff_known", "tariff_at_least", "tariff_below", "near", "price_below_market", "perishable"}
 
 # Same overland threshold the older rule-based steps used
 NEAR_KM = 3000
@@ -118,12 +119,15 @@ def build_next_steps(
         "tariff": tariff,
         "near": distance is not None and float(distance) < NEAR_KM,
         "price_below_market": row.get("price_competitiveness") in BELOW_MARKET,
+        "perishable": product_name in book.get("perishable_products", []),
     }
+    in_text = name_in_sentence(market_name) or market_name
     values = {
         "product": product_name,
         "product_lc": product_name.lower(),
-        "market": market_name,
-        "markets": _possessive(market_name),
+        "market": in_text,
+        "Market": in_text[:1].upper() + in_text[1:],
+        "markets": _possessive(in_text),
         "hs6": hs_code.replace(".", "").strip()[:6],
         "iso2": (iso2 or "").lower(),
         "tariff": f"{tariff:.1f}%" if tariff is not None else "",

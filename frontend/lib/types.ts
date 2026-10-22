@@ -124,6 +124,8 @@ export interface MarketProfile {
   product_name: string | null
   market_code: string
   market_name: string | null
+  /** The name as it reads mid-sentence: "the United Kingdom", "France" */
+  market_name_in_text: string | null
   computed_for_year: number | null
   opportunity_score: number | null
   score_breakdown: ScoreBreakdown
