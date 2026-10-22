@@ -75,6 +75,20 @@ enabled_products:
   - Apricots
   - Sesame Seeds
   - Flaxseed / Linseed
+  # Batch 4 (2026-10-22): carpets, cashmere & sheepskin
+  - Knotted Carpets
+  - Woven Carpets
+  - Raw Cashmere
+  - Processed Cashmere
+  - Cashmere Sweaters
+  - Karakul Sheepskin
+  # Batch 5 (2026-10-22): lapis lazuli, marble & talc
+  - Lapis Lazuli (Unworked)
+  - Lapis Lazuli (Worked)
+  - Lapis Lazuli (Articles)
+  - Marble & Travertine (Crude)
+  - Marble & Travertine (Cut)
+  - Talc
 
 # What kind of goods a product is — decides which documents step 1 asks for.
 # Set per category; `product_overrides` wins for individual products.

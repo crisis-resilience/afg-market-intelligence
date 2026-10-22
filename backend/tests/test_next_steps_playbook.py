@@ -134,8 +134,10 @@ class TestSaffronToIndia:
 
 class TestEdgeCases:
     def test_product_not_enabled_returns_none(self):
+        # Every real product is enabled now; a product outside the list (e.g.
+        # one newly added to config.PRODUCTS) keeps the rule-based steps.
         assert build_next_steps(
-            _row(), product_name="Talc", category="Minerals & Stones",
+            _row(), product_name="Some New Product", category="Minerals & Stones",
             hs_code="252620", market_code="251", market_name="France",
         ) is None
 
@@ -263,3 +265,18 @@ class TestCountryNamesInSentences:
     def test_other_names_are_unchanged(self):
         result = _saffron("251", "France")
         assert _step(result, "requirements")["description"].startswith("France sets rules")
+
+
+class TestBatchesFourAndFive:
+    def test_every_product_is_enabled(self):
+        # With batches 4 (carpets, cashmere, sheepskin) and 5 (lapis, marble,
+        # talc) every product in config.PRODUCTS uses the playbook.
+        assert set(PRODUCTS) <= set(load_playbook()["enabled_products"])
+
+    def test_raw_cashmere_and_sheepskin_get_veterinary_lines(self):
+        for product, hs in [("Raw Cashmere", "510211"), ("Karakul Sheepskin", "410510")]:
+            result = build_next_steps(
+                _row(), product_name=product, category="Luxury Fibres",
+                hs_code=hs, market_code="381", market_name="Italy",
+            )
+            assert "veterinary" in _step(result, "documents")["description"], product
