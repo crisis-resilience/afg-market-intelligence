@@ -164,8 +164,9 @@ steps:
     extra:
       - when: {eu: true}
         text: >-
-          As a least-developed country, Afghanistan can export most products to
-          the EU duty-free under the “Everything But Arms” scheme. To claim it
+          Under the EU's current trade rules, Afghanistan is among the
+          countries that can export most products to the EU duty-free, under
+          the “Everything But Arms” scheme. To claim it
           you need proof that your goods originate in Afghanistan — ask ACCI
           whether that is a certificate of origin or registration in the EU's
           REX system.
