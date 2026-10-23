@@ -147,7 +147,7 @@ export default async function MarketProfilePage(
                 value={formatPct(trade?.growth.cagr_pct)}
                 description={
                   trade?.growth.cagr_pct == null
-                    ? `Not enough years of Afghan exports to ${market} to calculate growth`
+                    ? `Not enough years of Afghan export data for ${market} to calculate growth`
                     : `Average yearly growth of Afghanistan's exports to ${market}${growthPeriod ? `, ${growthPeriod}` : ''}`
                 }
                 footer={growthPeriod && <span className="text-xs text-muted">{growthPeriod}</span>}
@@ -159,7 +159,7 @@ export default async function MarketProfilePage(
                 value={formatPct(trade?.growth.yoy_growth_pct)}
                 description={
                   trade?.growth.yoy_growth_pct == null
-                    ? `Not enough years of Afghan exports to ${market} to compare`
+                    ? `Not enough years of Afghan export data for ${market} to compare`
                     : `Change in Afghanistan's exports to ${market} compared with the year before`
                 }
                 footer={<YearNote year={trade?.growth.last_year ?? null} current={year} />}
