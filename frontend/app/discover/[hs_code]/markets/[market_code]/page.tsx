@@ -403,8 +403,15 @@ export default async function MarketProfilePage(
       <Band tone="grey">
         {/* ── Competitors ───────────────────────────────────────────────────── */}
         <div className="pt-2 pb-16">
-        {profile.competitors.length > 0 && (
-          <Panel title="Top competitors in this market">
+        <Panel title="Top competitors in this market">
+          {/* The ETL stores competitor lists only for each product's largest
+              import markets (config.TOP_N_MARKETS); say so rather than hide
+              the section, which read like missing data. */}
+          {profile.competitors.length === 0 ? (
+            <p className="text-sm text-muted m-0">
+              Competitor details are available for the 10 largest import markets for this product.
+            </p>
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -436,8 +443,8 @@ export default async function MarketProfilePage(
                 </tbody>
               </table>
             </div>
-          </Panel>
-        )}
+          )}
+        </Panel>
         </div>
       </Band>
     </>
