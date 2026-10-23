@@ -63,6 +63,12 @@ export default async function MarketProfilePage(
   // happens, surface the last year it did have any, purely for context.
   const showAfgLastExport = trade != null && trade.afg_export_value_usd == null && trade.afg_last_export_year != null
 
+  // Shown on the "Where Afghanistan stands" cards when Afghanistan has no
+  // exports here in the year shown, instead of a bare dash.
+  const noAfgExports =
+    (tradeYear != null ? `No Afghan exports to ${market} recorded in ${tradeYear}` : `No Afghan exports to ${market} on record`) +
+    (showAfgLastExport ? ` · last exported ${trade.afg_last_export_year}: ${formatUSD(trade.afg_last_export_value_usd)}` : '')
+
   const growthPeriod =
     trade?.growth.first_year != null && trade.growth.last_year != null
       ? `${trade.growth.first_year}–${trade.growth.last_year}`
@@ -168,9 +174,7 @@ export default async function MarketProfilePage(
                 icon={<ExportIcon />}
                 value={formatUSD(trade?.afg_export_value_usd)}
                 description={
-                  showAfgLastExport
-                    ? `No recorded exports this year. Last exported ${trade.afg_last_export_year}: ${formatUSD(trade.afg_last_export_value_usd)}`
-                    : `Value of ${product} Afghanistan sold to ${market}`
+                  trade?.afg_export_value_usd == null ? noAfgExports : `Value of ${product} Afghanistan sold to ${market}`
                 }
                 footer={<YearNote year={tradeYear} current={year} />}
               />
@@ -179,7 +183,7 @@ export default async function MarketProfilePage(
                 info={`Afghanistan’s share of ${markets} total imports of ${product}.`}
                 icon={<ShareRing pct={trade?.market_share_pct ?? null} />}
                 value={formatPct(trade?.market_share_pct, 2, false)}
-                description={`of ${markets} imports come from Afghanistan`}
+                description={trade?.market_share_pct == null ? noAfgExports : `of ${markets} imports come from Afghanistan`}
                 footer={<YearNote year={tradeYear} current={year} />}
               />
               <StatCard
@@ -187,7 +191,9 @@ export default async function MarketProfilePage(
                 info={`Afghanistan’s position among all countries supplying ${product} to ${market}, ranked by export value.`}
                 icon={<PodiumIcon />}
                 value={trade?.afg_supplier_rank != null ? `#${trade.afg_supplier_rank}` : '—'}
-                description={`Afghanistan’s position among all countries supplying ${market}`}
+                description={
+                  trade?.afg_supplier_rank == null ? noAfgExports : `Afghanistan’s position among all countries supplying ${market}`
+                }
                 footer={<YearNote year={tradeYear} current={year} />}
               />
             </CardGrid>
