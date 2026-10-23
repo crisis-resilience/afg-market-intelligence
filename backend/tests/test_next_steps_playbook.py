@@ -102,7 +102,8 @@ class TestSaffronToFrance:
         assert "Everything But Arms" in tariff["description"]
         assert any("everything-arms-eba" in u for u in _urls(tariff))
         assert any("registered-exporter-system" in u for u in _urls(tariff))
-        assert "On record: 0.0% (MFN rate)." in tariff["description"]
+        assert "today's rate on the Global Trade Helpdesk" in tariff["description"]
+        assert "%" not in tariff["description"]  # no WITS figure quoted
 
     def test_far_market_has_no_overland_line(self, result):
         assert "overland" not in _step(result, "transport")["description"]
@@ -119,8 +120,12 @@ class TestSaffronToIndia:
         assert "Everything But Arms" not in tariff["description"]
         assert _urls(tariff) == [GTH + "in/assess-requirements/tariffs"]
 
-    def test_high_tariff_line(self, result):
-        assert "That is high" in _step(result, "tariff")["description"]
+    def test_no_duty_figure_even_when_ours_is_high(self, result):
+        # Our 30% is a WITS average and may be out of date; step 2 sends the
+        # exporter to the exact current rate instead of quoting it.
+        description = _step(result, "tariff")["description"]
+        assert "30" not in description
+        assert "lower preferential rate" in description
 
     def test_near_market_mentions_overland(self, result):
         assert "within overland range" in _step(result, "transport")["description"]
@@ -134,8 +139,10 @@ class TestSaffronToIndia:
 
 class TestEdgeCases:
     def test_product_not_enabled_returns_none(self):
+        # Every real product is enabled now; a product outside the list (e.g.
+        # one newly added to config.PRODUCTS) keeps the rule-based steps.
         assert build_next_steps(
-            _row(), product_name="Talc", category="Minerals & Stones",
+            _row(), product_name="Some New Product", category="Minerals & Stones",
             hs_code="252620", market_code="251", market_name="France",
         ) is None
 
@@ -147,7 +154,7 @@ class TestEdgeCases:
         assert _urls(_step(result, "documents")) == ["https://acci.org.af/en/"]
 
     def test_unknown_tariff_skips_the_on_record_line(self):
-        assert "On record" not in _step(_saffron("251", "France"), "tariff")["description"]
+        assert "%" not in _step(_saffron("251", "France"), "tariff")["description"]
 
     def test_animal_product_asks_for_veterinary_certificate(self, monkeypatch):
         book = copy.deepcopy(load_playbook())
@@ -263,3 +270,18 @@ class TestCountryNamesInSentences:
     def test_other_names_are_unchanged(self):
         result = _saffron("251", "France")
         assert _step(result, "requirements")["description"].startswith("France sets rules")
+
+
+class TestBatchesFourAndFive:
+    def test_every_product_is_enabled(self):
+        # With batches 4 (carpets, cashmere, sheepskin) and 5 (lapis, marble,
+        # talc) every product in config.PRODUCTS uses the playbook.
+        assert set(PRODUCTS) <= set(load_playbook()["enabled_products"])
+
+    def test_raw_cashmere_and_sheepskin_get_veterinary_lines(self):
+        for product, hs in [("Raw Cashmere", "510211"), ("Karakul Sheepskin", "410510")]:
+            result = build_next_steps(
+                _row(), product_name=product, category="Luxury Fibres",
+                hs_code=hs, market_code="381", market_name="Italy",
+            )
+            assert "veterinary" in _step(result, "documents")["description"], product

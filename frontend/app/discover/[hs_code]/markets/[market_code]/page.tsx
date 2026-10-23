@@ -63,6 +63,12 @@ export default async function MarketProfilePage(
   // happens, surface the last year it did have any, purely for context.
   const showAfgLastExport = trade != null && trade.afg_export_value_usd == null && trade.afg_last_export_year != null
 
+  // Shown on the "Where Afghanistan stands" cards when Afghanistan has no
+  // exports here in the year shown, instead of a bare dash.
+  const noAfgExports =
+    (tradeYear != null ? `No Afghan exports to ${market} recorded in ${tradeYear}` : `No Afghan exports to ${market} on record`) +
+    (showAfgLastExport ? ` · last exported ${trade.afg_last_export_year}: ${formatUSD(trade.afg_last_export_value_usd)}` : '')
+
   const growthPeriod =
     trade?.growth.first_year != null && trade.growth.last_year != null
       ? `${trade.growth.first_year}–${trade.growth.last_year}`
@@ -131,19 +137,31 @@ export default async function MarketProfilePage(
                 footer={<YearNote year={tradeYear} current={year} />}
               />
               <StatCard
-                label="Market growth"
-                info={`Average yearly growth (CAGR) of ${markets} imports of ${product} over the period shown.`}
+                // Growth here is of Afghanistan's own exports to this market,
+                // not the market's total imports (docs/INDICATOR_INVENTORY.xlsx:
+                // cagr_pct, score_market_growth). Empty when Afghanistan exported
+                // here in fewer than two years.
+                label="Afghan export growth"
+                info={`Average yearly growth (CAGR) of Afghanistan's exports of ${product} to ${market} over the period shown. Feeds the "Market growth" part of the score.`}
                 icon={<TrendIcon />}
                 value={formatPct(trade?.growth.cagr_pct)}
-                description={growthPeriod ? `Average growth per year, ${growthPeriod}` : 'Average growth per year'}
+                description={
+                  trade?.growth.cagr_pct == null
+                    ? `Not enough years of Afghan export data for ${market} to calculate growth`
+                    : `Average yearly growth of Afghanistan's exports to ${market}${growthPeriod ? `, ${growthPeriod}` : ''}`
+                }
                 footer={growthPeriod && <span className="text-xs text-muted">{growthPeriod}</span>}
               />
               <StatCard
                 label="Year-on-year"
-                info={`Change in ${markets} imports of ${product} compared with the year before.`}
+                info={`Change in Afghanistan's exports of ${product} to ${market} compared with the year before.`}
                 icon={<BarsIcon />}
                 value={formatPct(trade?.growth.yoy_growth_pct)}
-                description={`Change in ${markets} imports compared with the year before`}
+                description={
+                  trade?.growth.yoy_growth_pct == null
+                    ? `Not enough years of Afghan export data for ${market} to compare`
+                    : `Change in Afghanistan's exports to ${market} compared with the year before`
+                }
                 footer={<YearNote year={trade?.growth.last_year ?? null} current={year} />}
               />
             </CardGrid>
@@ -156,9 +174,7 @@ export default async function MarketProfilePage(
                 icon={<ExportIcon />}
                 value={formatUSD(trade?.afg_export_value_usd)}
                 description={
-                  showAfgLastExport
-                    ? `No recorded exports this year. Last exported ${trade.afg_last_export_year}: ${formatUSD(trade.afg_last_export_value_usd)}`
-                    : `Value of ${product} Afghanistan sold to ${market}`
+                  trade?.afg_export_value_usd == null ? noAfgExports : `Value of ${product} Afghanistan sold to ${market}`
                 }
                 footer={<YearNote year={tradeYear} current={year} />}
               />
@@ -167,7 +183,7 @@ export default async function MarketProfilePage(
                 info={`Afghanistan’s share of ${markets} total imports of ${product}.`}
                 icon={<ShareRing pct={trade?.market_share_pct ?? null} />}
                 value={formatPct(trade?.market_share_pct, 2, false)}
-                description={`of ${markets} imports come from Afghanistan`}
+                description={trade?.market_share_pct == null ? noAfgExports : `of ${markets} imports come from Afghanistan`}
                 footer={<YearNote year={tradeYear} current={year} />}
               />
               <StatCard
@@ -175,7 +191,9 @@ export default async function MarketProfilePage(
                 info={`Afghanistan’s position among all countries supplying ${product} to ${market}, ranked by export value.`}
                 icon={<PodiumIcon />}
                 value={trade?.afg_supplier_rank != null ? `#${trade.afg_supplier_rank}` : '—'}
-                description={`Afghanistan’s position among all countries supplying ${market}`}
+                description={
+                  trade?.afg_supplier_rank == null ? noAfgExports : `Afghanistan’s position among all countries supplying ${market}`
+                }
                 footer={<YearNote year={tradeYear} current={year} />}
               />
             </CardGrid>
@@ -385,8 +403,15 @@ export default async function MarketProfilePage(
       <Band tone="grey">
         {/* ── Competitors ───────────────────────────────────────────────────── */}
         <div className="pt-2 pb-16">
-        {profile.competitors.length > 0 && (
-          <Panel title="Top competitors in this market">
+        <Panel title="Top competitors in this market">
+          {/* The ETL stores competitor lists only for each product's largest
+              import markets (config.TOP_N_MARKETS); say so rather than hide
+              the section, which read like missing data. */}
+          {profile.competitors.length === 0 ? (
+            <p className="text-sm text-muted m-0">
+              Competitor details are available for the 10 largest import markets for this product.
+            </p>
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -418,8 +443,8 @@ export default async function MarketProfilePage(
                 </tbody>
               </table>
             </div>
-          </Panel>
-        )}
+          )}
+        </Panel>
         </div>
       </Band>
     </>

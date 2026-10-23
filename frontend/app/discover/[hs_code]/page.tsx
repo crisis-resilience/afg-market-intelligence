@@ -67,9 +67,9 @@ export default async function DiscoverPage(props: PageProps<'/discover/[hs_code]
                     </div>
                     <dl className="grid grid-cols-2 gap-x-[18px] gap-y-2.5 pl-9 m-0">
                       <Metric
-                        label="Average yearly growth"
+                        label="Afghan export growth"
                         value={formatPct(market.cagr_pct)}
-                        title="Average yearly growth of this market's imports of the product, over recent years"
+                        title="Average yearly growth of Afghanistan's exports of this product to this market, over recent years"
                       />
                       <Metric
                         label="Afghanistan’s share of imports"

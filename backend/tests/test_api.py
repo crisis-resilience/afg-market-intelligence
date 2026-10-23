@@ -574,14 +574,15 @@ class TestDiscovery:
         assert "title" in step
         assert "description" in step
 
-    def test_high_tariff_triggers_tariff_next_step(self, client, seeded_db):
-        # India has 30% tariff in fixtures — should trigger the high-tariff
-        # guidance. Saffron uses the playbook (backend/playbook/next_steps.yaml).
+    def test_tariff_step_points_to_the_current_rate(self, client, seeded_db):
+        # India has a 30% tariff in fixtures. Saffron uses the playbook
+        # (backend/playbook/next_steps.yaml), whose step 2 points to the exact
+        # current rate on the Helpdesk instead of quoting ours.
         r = client.get("/api/discover/091020/markets/699")
         body = r.json()
         tariff = next(s for s in body["next_steps"] if s["key"] == "tariff")
-        assert "30.0%" in tariff["description"]
-        assert "That is high" in tariff["description"]
+        assert "30.0%" not in tariff["description"]  # step 2 quotes no WITS figure
+        assert "today's rate on the Global Trade Helpdesk" in tariff["description"]
         assert tariff["links"][0]["url"] == (
             "https://globaltradehelpdesk.org/en/export-091020-from-af-to-in/assess-requirements/tariffs"
         )
