@@ -346,15 +346,6 @@ export default async function MarketProfilePage(
               <div className="mt-6 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8 items-start">
                 <NextSteps steps={profile.next_steps} />
                 <div className="flex flex-col gap-5">
-                  <div className="bg-white border border-line rounded-md px-6 py-[22px] flex flex-col gap-3">
-                    <h3 className="text-base font-semibold m-0">Want help acting on this?</h3>
-                    <p className="text-sm leading-[1.5] text-muted m-0">
-                      An advisor at your nearest office can walk through these results with you.
-                    </p>
-                    <span title="Coming soon" className="flex items-center justify-center h-[42px] rounded border border-undp text-undp text-sm font-medium cursor-default">
-                      Find your nearest office
-                    </span>
-                  </div>
                   {profile.next_steps_more && (
                     <p className="m-0">
                       <ExternalLink link={profile.next_steps_more} strong />
