@@ -44,7 +44,7 @@ def read_global_headers(path: Path) -> list[tuple[str, str]]:
 
 class SiteHandler(http.server.SimpleHTTPRequestHandler):
     app_url = "http://localhost:3000/"
-    extra_headers: list[tuple[str, str]] = []
+    headers_file = SITE_DIR / "_headers"
 
     def _redirect_app(self) -> bool:
         if self.path.split("?", 1)[0].rstrip("/") != "/app":
@@ -63,7 +63,8 @@ class SiteHandler(http.server.SimpleHTTPRequestHandler):
             super().do_HEAD()
 
     def end_headers(self) -> None:
-        for name, value in self.extra_headers:
+        # Read on every response, so edits to _headers apply without a restart
+        for name, value in read_global_headers(self.headers_file):
             # Browsers ignore HSTS over plain http, and localhost must stay http
             if name.lower() != "strict-transport-security":
                 self.send_header(name, value)
@@ -80,7 +81,6 @@ def main() -> None:
     args = parser.parse_args()
 
     SiteHandler.app_url = args.app_url
-    SiteHandler.extra_headers = read_global_headers(SITE_DIR / "_headers")
     handler = functools.partial(SiteHandler, directory=str(SITE_DIR))
 
     with http.server.ThreadingHTTPServer(("127.0.0.1", args.port), handler) as server:

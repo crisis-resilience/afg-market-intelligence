@@ -15,18 +15,47 @@
 //   title        Full name, shown in the list and the day card.
 //   short        Shorter name for the calendar squares.
 //   description  One or two sentences.
-//   province     Used by the Province filter.
+//   province     Not shown at the moment (the page has no province filter);
+//                keep filling it in so the filter can come back.
 //   place, time, language, price   Shown as written.
-//   capacity, registered   Numbers. When registered reaches capacity the
-//                event shows as Full with a waiting-list link. Leave both out
-//                to show "Places available".
+//   capacity     Number of seats. The seats taken are counted automatically
+//                from the registration sheet (see below), and the event shows
+//                "X places left", then Full with a waiting-list link. Leave it
+//                out to show "Places available" with no count.
+//   registered   (optional) Seats taken, typed by hand. Only used when the
+//                sheet can't be reached; the sheet's count replaces it.
 //   applyBy      'YYYY-MM-DD' (optional) — shown instead of places left.
-//   registerUrl  Where the Register button goes. '#' until registration is set
-//                up.
-//   waitlistUrl  Where "Join the waiting list" goes when the event is full.
+//   registerUrl  (optional) A different place for this event's Register button.
+//                Leave it out to use the registration form below.
+//   waitlistUrl  (optional) The same, for "Join the waiting list".
+//   fa, ps       The Dari (fa) and Pashto (ps) wording, for fa/events.html
+//                and ps/events.html: any of title, short, description, place,
+//                time, language, price. Anything left out shows in English.
 //
-// The entries below are the sample events from the design mockup.
+// The entries below are examples. The trainings use the real course names
+// from the three training topics; their dates, places and numbers are made up.
 // =============================================================================
+
+// ── Registration form ────────────────────────────────────────────────────────
+// Every Register and "Join the waiting list" button opens this form with its
+// first question ("Training / event") already filled in, e.g.
+// "Where should I export? (4 Nov 2026)". Responses stay in the form owner's
+// Google account, never on this website or in the code.
+//
+//   formUrl     The form's link, ending in /viewform.
+//   eventField  The code of the "Training / event" question (entry.<number>).
+//               Find it with ⋮ > Get pre-filled link in the form editor.
+//   countsUrl   The Web app URL of the script in the response sheet
+//               (scripts/registration_sheet.gs). The page asks it how many
+//               seats each event has taken: numbers only, no personal data.
+//               Leave it '' to show the capacity without counting.
+//
+// To move to another form tool later (e.g. KoboToolbox), change these.
+window.MSME_REGISTRATION = {
+  formUrl: 'https://docs.google.com/forms/d/e/1FAIpQLSfWKTEw6mrAMdQIsg40hopQFeejzhnpHXUnMoG1nx-yL0U0ow/viewform',
+  eventField: 'entry.41557620',
+  countsUrl: 'https://script.google.com/macros/s/AKfycbxoPqdw0741aSQsl7cXky1Z9oB2E-ivULSEbv_NVnqoKo2wy0OJsQ-4NVyUfE4MLLjz/exec'
+};
 
 window.MSME_EVENTS = [
   {
@@ -43,30 +72,22 @@ window.MSME_EVENTS = [
     price: 'Free',
     capacity: 40,
     registered: 32,
-    registerUrl: '#'
-  },
-  {
-    date: '2026-10-06',
-    type: 'training',
-    topic: 'export-readiness',
-    title: 'Export documentation — what a shipment needs',
-    short: 'Export documentation',
-    description: 'Certificates of origin, phytosanitary certificates, packing lists, and the customs declaration. One day, hands on, with the real forms.',
-    province: 'Kabul',
-    place: 'Kabul centre',
-    time: '09:00–15:00',
-    language: 'Dari and Pashto',
-    price: 'Free',
-    capacity: 15,
-    registered: 15,
-    registerUrl: '#',
-    waitlistUrl: '#'
-  },
-  {
-    date: '2026-10-15',
-    type: 'deadline',
-    title: 'Quarterly business tax filing deadline',
-    short: 'Tax filing deadline'
+    fa: {
+      title: 'B2B خریداران زعفران — واردکنندگان کشورهای خلیج',
+      short: 'B2B خریداران زعفران',
+      description: 'دوازده واردکنندهٔ تأییدشده از امارات متحدهٔ عربی، عربستان سعودی و قطر. نمونه‌ها و اسناد تصدیق‌نامهٔ خود را همراه بیاورید. برای تولیدکنندگانی که صادرات دارند یا آمادهٔ آن هستند.',
+      place: 'هرات · نمایندگی ACCI',
+      language: 'دری و انگلیسی',
+      price: 'رایگان'
+    },
+    ps: {
+      title: 'د زعفرانو پېرودونکو B2B — د خلیج هېوادونو واردوونکي',
+      short: 'د زعفرانو B2B',
+      description: 'له متحده عربي اماراتو، سعودي عربستان او قطر څخه دولس تایید شوي واردوونکي. خپلې نمونې او د تصدیق اسناد له ځانه سره راوړئ. د هغو تولیدوونکو لپاره چې صادرات لري یا ورته چمتو دي.',
+      place: 'هرات · د ACCI څانګه',
+      language: 'دري او انګلیسي',
+      price: 'وړیا'
+    }
   },
   {
     date: '2026-10-19',
@@ -81,20 +102,102 @@ window.MSME_EVENTS = [
     language: 'Dari',
     price: 'Free',
     applyBy: '2026-10-12',
-    registerUrl: '#'
+    fa: {
+      title: 'ارتباط‌دهی مالی — پروسس‌کنندگان میوهٔ خشک',
+      short: 'ارتباط‌دهی مالی',
+      description: 'ملاقات‌های پانزده‌دقیقه‌ای با چهار بانک و دو صندوق سرمایه‌گذاری. بستهٔ درخواست را از آموزش تمویل همراه بیاورید، یا اول یک جلسه برای آماده‌سازی آن بگیرید.',
+      place: 'مزار شریف · نمایندگی ACCI',
+      language: 'دری',
+      price: 'رایگان'
+    },
+    ps: {
+      title: 'مالي نښلول — د وچې مېوې پروسس کوونکي',
+      short: 'مالي نښلول',
+      description: 'له څلورو بانکونو او دوو پانګونې صندوقونو سره پنځلس دقیقې لیدنې. د تمویل له روزنې څخه د غوښتنلیک کڅوړه راوړئ، یا لومړی د هغې د چمتو کولو لپاره یوه ناسته ونیسئ.',
+      place: 'مزار شریف · د ACCI څانګه',
+      language: 'دري',
+      price: 'وړیا'
+    }
   },
   {
-    date: '2026-11-02',
+    date: '2026-11-04',
+    type: 'training',
+    topic: 'export-readiness',
+    title: 'Where should I export?',
+    short: 'Where to export',
+    province: 'Kabul',
+    place: 'Kabul centre',
+    time: '09:00–15:00',
+    language: 'Dari',
+    price: 'Free',
+    capacity: 20,
+    fa: {
+      title: 'به کجا صادر کنم؟',
+      short: 'بازار صادراتی',
+      place: 'مرکز کابل',
+      language: 'دری',
+      price: 'رایگان'
+    },
+    ps: {
+      title: 'چېرته صادرات وکړم؟',
+      short: 'صادراتي بازار',
+      place: 'د کابل مرکز',
+      language: 'دري',
+      price: 'وړیا'
+    }
+  },
+  {
+    date: '2026-11-10',
+    type: 'training',
+    topic: 'sector',
+    title: 'Product Quality and Standards Readiness',
+    short: 'Product quality',
+    province: 'Kabul',
+    place: 'Kabul centre',
+    time: '09:00–15:00',
+    language: 'Dari and Pashto',
+    price: 'Free',
+    capacity: 30,
+    fa: {
+      title: 'کیفیت محصول و آمادگی برای معیارها',
+      short: 'کیفیت محصول',
+      place: 'مرکز کابل',
+      language: 'دری و پشتو',
+      price: 'رایگان'
+    },
+    ps: {
+      title: 'د محصول کیفیت او معیارونو ته چمتووالی',
+      short: 'د محصول کیفیت',
+      place: 'د کابل مرکز',
+      language: 'دري او پښتو',
+      price: 'وړیا'
+    }
+  },
+  {
+    date: '2026-11-23',
     type: 'training',
     topic: 'finance',
-    title: 'Keeping books a lender will accept',
-    short: 'Keeping books for lenders',
-    description: 'Three half-days. What records to keep, how to show cash flow, and how to put together the pack banks ask for. Bring your own figures if you have them.',
-    province: 'Nangarhar',
-    place: 'Jalalabad · ACCI branch',
-    time: 'Three mornings',
-    language: 'Pashto',
+    title: 'Business Formalization and Regulatory Compliance',
+    short: 'Business formalization',
+    province: 'Kabul',
+    place: 'Kabul centre',
+    time: '09:00–15:00',
+    language: 'Dari and Pashto',
     price: 'Free',
-    registerUrl: '#'
+    capacity: 30,
+    fa: {
+      title: 'رسمی‌سازی کسب‌وکار و رعایت مقررات',
+      short: 'رسمی‌سازی کسب‌وکار',
+      place: 'مرکز کابل',
+      language: 'دری و پشتو',
+      price: 'رایگان'
+    },
+    ps: {
+      title: 'د سوداګرۍ رسمي کول او له مقرراتو سره سمون',
+      short: 'د سوداګرۍ رسمي کول',
+      place: 'د کابل مرکز',
+      language: 'دري او پښتو',
+      price: 'وړیا'
+    }
   }
 ];

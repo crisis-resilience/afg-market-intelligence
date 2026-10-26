@@ -80,3 +80,6 @@ scratch/
 # frontend/. Large (photos embedded) and inside docs/, which GitHub Pages may
 # publish -- keep them local.
 docs/website_pages/
+
+# Event registrations downloaded from the registration form (personal data: never commit)
+registrations/
