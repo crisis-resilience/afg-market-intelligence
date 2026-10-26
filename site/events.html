@@ -4,8 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Trainings &amp; Events — MSME Support Centre</title>
-  <meta name="description" content="Upcoming trainings, B2B meetings and matchmaking events for Afghan businesses. Register online or through your nearest office.">
-  <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+  <meta name="description" content="Upcoming trainings, B2B meetings and matchmaking events for Afghan businesses. Register online.">
+  <link rel="alternate" hreflang="en" href="events.html">
+  <link rel="alternate" hreflang="fa-AF" href="fa/events.html">
+  <link rel="alternate" hreflang="ps" href="ps/events.html">
+  <link rel="icon" href="images/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="images/favicon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@400;500&display=swap">
@@ -19,11 +24,7 @@
 <header class="site-header">
   <div class="container site-header__inner">
     <a class="brand" href="./" aria-label="MSME Support Centre, Afghanistan — home">
-      <svg class="brand__mark" width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-        <circle cx="15" cy="15" r="3.1"></circle>
-        <path class="brand__ray" d="M15 9.4 L15 2.6 M15 20.6 L15 27.4 M9.4 15 L2.6 15 M20.6 15 L27.4 15" stroke-width="2" stroke-linecap="round"></path>
-        <path class="brand__ray2" d="M19.4 10.6 L24.2 5.8 M10.6 19.4 L5.8 24.2" stroke-width="2" stroke-linecap="round"></path>
-      </svg>
+      <img class="brand__logo" src="images/logo-amsme.png" width="44" height="43" alt="">
       <span class="brand__text">
         <span class="brand__name">MSME Support Centre</span>
         <span class="brand__place">AFGHANISTAN</span>
@@ -37,14 +38,23 @@
     <nav id="site-nav" class="site-nav" aria-label="Main">
       <ul class="site-nav__list">
         <li><a href="./">Home</a></li>
+        <li class="site-nav__has-sub">
+          <button type="button" class="site-nav__sub-toggle" aria-expanded="false" aria-controls="nav-services">Our Services<svg class="site-nav__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <ul class="site-nav__sub" id="nav-services">
+            <li><a href="events.html?type=training">Trainings</a></li>
+            <li><a href="events.html?type=b2b">B2B Meetings</a></li>
+            <li><a href="events.html">Investor Matchmaking</a></li>
+            <li><a href="/app">Market Intelligence Tool</a></li>
+          </ul>
+        </li>
         <li><a href="./#about">About</a></li>
-        <li><a href="/app">Find your market</a></li>
+        <li><a href="/app">Market Intelligence Tool</a></li>
         <li><a href="events.html" class="is-current" aria-current="page">Trainings &amp; Events</a></li>
       </ul>
       <div class="lang-switch">
         <span lang="en" class="is-active">English</span> ·
-        <bdi lang="fa-AF" dir="rtl" class="is-soon" title="Coming soon">دری</bdi> ·
-        <bdi lang="ps" dir="rtl" class="is-soon" title="Coming soon">پښتو</bdi>
+        <a href="fa/events.html" lang="fa-AF" dir="rtl" hreflang="fa-AF">دری</a> ·
+        <a href="ps/events.html" lang="ps" hreflang="ps">پښتو</a>
       </div>
     </nav>
   </div>
@@ -64,7 +74,7 @@
           <span aria-current="page">Trainings &amp; Events</span>
         </nav>
         <h1 class="page-banner__title">Trainings &amp; Events</h1>
-        <p class="page-banner__lead">Browse upcoming trainings and events and register online, or call your nearest office and we’ll sign you up.</p>
+        <p class="page-banner__lead">Browse upcoming trainings and events and register online.</p>
       </div>
       <div class="segmented segmented--banner" role="group" aria-label="Which events">
         <button type="button" data-when="upcoming" aria-pressed="true">Upcoming</button>
@@ -73,11 +83,72 @@
     </div>
   </section>
 
+  <!-- ── Training topics: one tab per topic (tabs are run by js/events.js;
+       without JavaScript all three panels simply show one after another) ── -->
+  <section id="topics" class="topics" aria-labelledby="topics-title">
+    <div class="container">
+      <h2 class="topics__title" id="topics-title">Training topics</h2>
+      <div class="topics__tabs" role="tablist" aria-labelledby="topics-title">
+        <button type="button" role="tab" id="topic-tab-sector" aria-controls="topic-sector" aria-selected="true" tabindex="0" data-topic-tab="sector">Sector Specific</button>
+        <button type="button" role="tab" id="topic-tab-export-readiness" aria-controls="topic-export-readiness" aria-selected="false" tabindex="-1" data-topic-tab="export-readiness">Export Readiness</button>
+        <button type="button" role="tab" id="topic-tab-finance" aria-controls="topic-finance" aria-selected="false" tabindex="-1" data-topic-tab="finance">Finance</button>
+      </div>
+      <div class="topics__panel" role="tabpanel" id="topic-sector" aria-labelledby="topic-tab-sector" data-topic-panel="sector">
+        <div class="topics__about">
+          <p>This topic aims to strengthen the competitiveness of MSMEs by improving product quality, compliance with relevant standards, packaging and labelling practices, post-harvest management, and value addition. This topic also seeks to strengthen the capacities of chambers of commerce and other partner institutions to ensure the long-term sustainability and scalability of business support services.</p>
+          <button type="button" class="link-button" data-show-topic="sector">See events on this topic →</button>
+        </div>
+        <div>
+          <h3 class="topics__list-title">Training modules</h3>
+          <ul class="topics__list">
+            <li>Post-Harvest Handling, Storage and Loss Reduction</li>
+            <li>Product Quality and Standards Readiness</li>
+            <li>Value Addition</li>
+            <li>Packaging, labelling and brand presentation</li>
+            <li>Export requirements</li>
+          </ul>
+        </div>
+      </div>
+      <div class="topics__panel" role="tabpanel" id="topic-export-readiness" aria-labelledby="topic-tab-export-readiness" data-topic-panel="export-readiness">
+        <div class="topics__about">
+          <p>This topic aims to equip MSMEs to access markets by building practical export and trade capabilities. It covers export readiness and basic compliance, the documentation and customs procedures required to move goods legally and efficiently, and the logistics skills needed to manage courier and fulfillment processes. It also strengthens marketing and negotiation for buyer engagement, alongside e-commerce and digital export skills to help firms reach customers through online channels.</p>
+          <button type="button" class="link-button" data-show-topic="export-readiness">See events on this topic →</button>
+        </div>
+        <div>
+          <h3 class="topics__list-title">Training modules</h3>
+          <ul class="topics__list">
+            <li>Can I export?</li>
+            <li>Where should I export?</li>
+            <li>Who will buy my products?</li>
+            <li>How should I structure the deal?</li>
+            <li>How do I deliver the shipment?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="topics__panel" role="tabpanel" id="topic-finance" aria-labelledby="topic-tab-finance" data-topic-panel="finance">
+        <div class="topics__about">
+          <p>This topic aims to improve MSMEs’ ability to manage, formalize, and finance their operations. It builds core business foundations and business model development, strengthens bookkeeping, cashflow and financial management, and supports business formalization so firms can engage more easily with financial institutions and larger buyers. It also emphasizes risk management and resilience so businesses can withstand shocks and operate sustainably.</p>
+          <button type="button" class="link-button" data-show-topic="finance">See events on this topic →</button>
+        </div>
+        <div>
+          <h3 class="topics__list-title">Training modules</h3>
+          <ul class="topics__list">
+            <li>Business Foundations and Business Model Development</li>
+            <li>Bookkeeping and Financial Management (Finance for non Financial Professionals)</li>
+            <li>Business Formalization and Regulatory Compliance</li>
+            <li>Access to Finance and Investment Readiness</li>
+            <li>Risk Management and Enterprise Resilience</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Filters ─────────────────────────────────────────────────────────── -->
   <div class="container">
     <div class="filters" id="filters">
       <fieldset class="filter">
-        <legend class="filter__label">Type</legend>
+        <legend class="filter__label">Event type</legend>
         <div class="chips">
           <button type="button" class="chip" data-type="all" aria-pressed="true">All</button>
           <button type="button" class="chip" data-type="training" aria-pressed="false">Training</button>
@@ -86,19 +157,13 @@
         </div>
       </fieldset>
       <fieldset class="filter">
-        <legend class="filter__label">Topic</legend>
+        <legend class="filter__label">Training topic</legend>
         <div class="chips">
+          <button type="button" class="chip" data-topic="sector" aria-pressed="false">Sector specific</button>
           <button type="button" class="chip" data-topic="export-readiness" aria-pressed="false">Export readiness</button>
           <button type="button" class="chip" data-topic="finance" aria-pressed="false">Finance</button>
-          <button type="button" class="chip" data-topic="sector" aria-pressed="false">Sector</button>
         </div>
       </fieldset>
-      <div class="filter">
-        <label class="filter__label" for="province">Province</label>
-        <select class="select" id="province">
-          <option value="all">All provinces</option>
-        </select>
-      </div>
       <div class="filters__end">
         <div class="filters__count" id="events-count" aria-live="polite"></div>
         <div class="segmented" role="group" aria-label="View">
@@ -119,8 +184,7 @@
       <!-- ── List view ───────────────────────────────────────────────────── -->
       <div id="list-view">
         <div class="calendar-switch-row">
-          <span id="cal-label-list">Show dates in</span>
-          <div class="segmented segmented--small" role="group" aria-labelledby="cal-label-list">
+          <div class="segmented segmented--small" role="group" aria-label="Calendar system">
             <button type="button" data-cal="g" aria-pressed="true">Gregorian</button>
             <button type="button" data-cal="s" aria-pressed="false">Solar Hijri</button>
           </div>
@@ -161,10 +225,6 @@
 
           <aside class="calendar__side" aria-label="Selected day">
             <div class="day-card" id="day-card" aria-live="polite"></div>
-            <div>
-              <h3 class="month-list__title">Also this month</h3>
-              <ul class="month-list" id="month-list"></ul>
-            </div>
           </aside>
         </div>
       </div>
@@ -173,15 +233,6 @@
   </div>
 
   <div class="container">
-    <!-- ── No event near you ─────────────────────────────────────────────── -->
-    <div class="callout">
-      <div class="callout__text">
-        <h2 class="callout__title">Nothing near you this month?</h2>
-        <p>Branches run sessions on request when enough businesses ask. Tell your nearest office what you need.</p>
-      </div>
-      <span class="button-outline is-soon" title="Coming soon">Find your nearest office</span>
-    </div>
-
     <!-- ── Past, with outcomes ───────────────────────────────────────────── -->
     <section class="outcomes" aria-labelledby="outcomes-title">
       <div class="outcomes__head">
@@ -199,7 +250,7 @@
         </li>
         <li class="outcome">
           <div class="outcome__when">28 JUL · HERAT</div>
-          <h3 class="outcome__title">Packaging and grading for export</h3>
+          <h3 class="outcome__title">Packaging, labelling and brand presentation</h3>
           <dl class="outcome__stats">
             <div><dt>trained</dt><dd>48</dd></div>
             <div><dt>women-led</dt><dd>19</dd></div>
@@ -224,39 +275,29 @@
     <div class="site-footer__main">
       <div class="site-footer__about">
         <div class="site-footer__brand">
-          <svg width="28" height="28" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-            <circle cx="15" cy="15" r="3.1" fill="#FFFFFF"></circle>
-            <path d="M15 9.4 L15 2.6 M15 20.6 L15 27.4 M9.4 15 L2.6 15 M20.6 15 L27.4 15" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"></path>
-            <path d="M19.4 10.6 L24.2 5.8 M10.6 19.4 L5.8 24.2" stroke="#D8923C" stroke-width="2" stroke-linecap="round"></path>
-          </svg>
+          <img class="site-footer__logo" src="images/logo-amsme.png" width="40" height="39" alt="">
           MSME Support Centre
         </div>
         <p class="site-footer__blurb">Export readiness, market intelligence and access to finance for Afghan micro, small and medium enterprises.</p>
         <address class="site-footer__contact">
-          <span>[STREET ADDRESS], Kabul</span>
-          <span class="mono">[HELPLINE] · [WHATSAPP]</span>
+          <span>Chaman-E Huzori<br>Next to Kabul Nendari<br>Kabul, Afghanistan</span>
         </address>
       </div>
 
       <nav class="site-footer__cols" aria-label="Footer">
         <div>
-          <h2 class="site-footer__heading">Find your market</h2>
-          <ul class="site-footer__links">
-            <li><a href="/app">Market Intelligence Tool</a></li>
-          </ul>
-        </div>
-        <div>
-          <h2 class="site-footer__heading">Trainings &amp; Events</h2>
-          <ul class="site-footer__links">
-            <li><a href="events.html?topic=export-readiness">Export readiness</a></li>
-            <li><a href="events.html?topic=finance">Finance</a></li>
-            <li><a href="events.html?type=b2b">B2B &amp; matchmaking</a></li>
-          </ul>
-        </div>
-        <div>
           <h2 class="site-footer__heading">About</h2>
           <ul class="site-footer__links">
             <li><span class="is-soon" title="Coming soon">Contact</span></li>
+          </ul>
+        </div>
+        <div>
+          <h2 class="site-footer__heading">Our Services</h2>
+          <ul class="site-footer__links">
+            <li><a href="events.html?type=training">Trainings</a></li>
+            <li><a href="events.html?type=b2b">B2B Meetings</a></li>
+            <li><a href="events.html">Investor Matchmaking</a></li>
+            <li><a href="/app">Market Intelligence Tool</a></li>
           </ul>
         </div>
       </nav>

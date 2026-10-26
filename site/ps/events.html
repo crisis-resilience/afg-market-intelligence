@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ps" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>روزنې او غونډې — د کوچنیو او منځنیو تصدیو د ملاتړ مرکز</title>
+  <meta name="description" content="د افغان سوداګریو لپاره راتلونکې روزنې، B2B غونډې او د نښلولو غونډې. آنلاین نوم ولیکئ.">
+  <link rel="alternate" hreflang="en" href="../events.html">
+  <link rel="alternate" hreflang="fa-AF" href="../fa/events.html">
+  <link rel="alternate" hreflang="ps" href="events.html">
+  <link rel="icon" href="../images/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="../images/favicon-192.png" type="image/png" sizes="192x192">
+  <link rel="apple-touch-icon" href="../images/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="../css/site.css">
+  <script src="../js/site.js" defer></script>
+  <script src="../js/events-data.js" defer></script>
+  <script src="../js/events.js" defer></script>
+</head>
+<body>
+
+<!-- Pashto version of ../events.html. Keep it in step with the English and Dari (../fa/) pages.
+     The events themselves come from ../js/events-data.js (their `ps` entries). -->
+
+<header class="site-header">
+  <div class="container site-header__inner">
+    <a class="brand" href="./" aria-label="د کوچنیو او منځنیو تصدیو د ملاتړ مرکز، افغانستان — کور پاڼه">
+      <img class="brand__logo" src="../images/logo-amsme.png" width="44" height="43" alt="">
+      <span class="brand__text">
+        <span class="brand__name">د کوچنیو او منځنیو تصدیو د ملاتړ مرکز</span>
+        <span class="brand__place">افغانستان</span>
+      </span>
+    </a>
+
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
+      <span class="nav-toggle__bars" aria-hidden="true"></span>مینو
+    </button>
+
+    <nav id="site-nav" class="site-nav" aria-label="اصلي">
+      <ul class="site-nav__list">
+        <li><a href="./">کور پاڼه</a></li>
+        <li class="site-nav__has-sub">
+          <button type="button" class="site-nav__sub-toggle" aria-expanded="false" aria-controls="nav-services">زموږ خدمتونه<svg class="site-nav__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+          <ul class="site-nav__sub" id="nav-services">
+            <li><a href="events.html?type=training">روزنې</a></li>
+            <li><a href="events.html?type=b2b">B2B غونډې</a></li>
+            <li><a href="events.html">له پانګوالو سره نښلول</a></li>
+            <li><a href="/app">د بازار د معلوماتو وسیله</a></li>
+          </ul>
+        </li>
+        <li><a href="./#about">زموږ په اړه</a></li>
+        <li><a href="/app">د بازار د معلوماتو وسیله</a></li>
+        <li><a href="events.html" class="is-current" aria-current="page">روزنې او غونډې</a></li>
+      </ul>
+      <div class="lang-switch">
+        <a href="../events.html" lang="en" dir="ltr" hreflang="en">English</a> ·
+        <a href="../fa/events.html" lang="fa-AF" hreflang="fa-AF">دری</a> ·
+        <span class="is-active">پښتو</span>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main id="events-app">
+
+  <!-- ── Title: photo banner ─────────────────────────────────────────────── -->
+  <section class="page-banner">
+    <img class="page-banner__photo" src="../images/banner-trainings.jpg" width="1920" height="1080" alt="ښځې د کمپیوټر په یوه روزنیزه ناسته کې ګډون کوي" fetchpriority="high">
+    <div class="page-banner__shade" aria-hidden="true"></div>
+    <div class="container page-banner__inner">
+      <div class="page-banner__text">
+        <nav class="breadcrumb" aria-label="د پاڼې لاره">
+          <a href="./">کور پاڼه</a>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+          <span aria-current="page">روزنې او غونډې</span>
+        </nav>
+        <h1 class="page-banner__title">روزنې او غونډې</h1>
+        <p class="page-banner__lead">راتلونکې روزنې او غونډې وګورئ او آنلاین نوم ولیکئ.</p>
+      </div>
+      <div class="segmented segmented--banner" role="group" aria-label="کومې غونډې">
+        <button type="button" data-when="upcoming" aria-pressed="true">راتلونکې</button>
+        <button type="button" data-when="past" aria-pressed="false">تېرې</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Training topics: one tab per topic (tabs are run by js/events.js;
+       without JavaScript all three panels simply show one after another) ── -->
+  <section id="topics" class="topics" aria-labelledby="topics-title">
+    <div class="container">
+      <h2 class="topics__title" id="topics-title">د روزنې موضوعګانې</h2>
+      <div class="topics__tabs" role="tablist" aria-labelledby="topics-title">
+        <button type="button" role="tab" id="topic-tab-sector" aria-controls="topic-sector" aria-selected="true" tabindex="0" data-topic-tab="sector">د سکتور ځانګړې</button>
+        <button type="button" role="tab" id="topic-tab-export-readiness" aria-controls="topic-export-readiness" aria-selected="false" tabindex="-1" data-topic-tab="export-readiness">صادراتي چمتووالی</button>
+        <button type="button" role="tab" id="topic-tab-finance" aria-controls="topic-finance" aria-selected="false" tabindex="-1" data-topic-tab="finance">تمویل</button>
+      </div>
+      <div class="topics__panel" role="tabpanel" id="topic-sector" aria-labelledby="topic-tab-sector" data-topic-panel="sector">
+        <div class="topics__about">
+          <p>د دې موضوع موخه د محصول د کیفیت، اړوندو معیارونو ته د پاملرنې، د بسته بندۍ او لیبل لګولو د طریقو، د حاصلاتو وروسته مدیریت او ارزښت زیاتولو له لارې د تصدیو سیالي ځواک پیاوړی کول دي. دا موضوع همدارنګه د سوداګریزو خونو او نورو همکارو بنسټونو ظرفیت پیاوړی کوي څو د سوداګرۍ د ملاتړ خدمتونو اوږدمهاله دوام او پراختیا ډاډمنه شي.</p>
+          <button type="button" class="link-button" data-show-topic="sector">د دې موضوع غونډې وګورئ ←</button>
+        </div>
+        <div>
+          <h3 class="topics__list-title">د روزنې ماډیولونه</h3>
+          <ul class="topics__list">
+            <li>د حاصلاتو وروسته ساتنه، زېرمه کول او د زیانونو کمول</li>
+            <li>د محصول کیفیت او معیارونو ته چمتووالی</li>
+            <li>ارزښت زیاتول</li>
+            <li>بسته بندي، لیبل لګول او د برانډ وړاندې کول</li>
+            <li>صادراتي اړتیاوې</li>
+          </ul>
+        </div>
+      </div>
+      <div class="topics__panel" role="tabpanel" id="topic-export-readiness" aria-labelledby="topic-tab-export-readiness" data-topic-panel="export-readiness">
+        <div class="topics__about">
+          <p>د دې موضوع موخه دا ده چې کوچنۍ او منځنۍ تصدۍ د صادراتو او سوداګرۍ د عملي وړتیاوو په جوړولو سره بازارونو ته د لاسرسي لپاره چمتو کړي. دا موضوع صادراتي چمتووالی او لومړنۍ اړتیاوې، د توکو د قانوني او اغېزمن لېږد لپاره اړین اسناد او ګمرکي کړنلارې، او د پوستي لېږد او د سپارښتنو د پوره کولو د مدیریت لپاره لوژستیکي مهارتونه رانغاړي. همدارنګه له پېرودونکو سره د اړیکو لپاره بازارموندنه او خبرې اترې پیاوړې کوي، او د برېښنايي سوداګرۍ او ډیجیټلي صادراتو مهارتونه ورزده کوي څو شرکتونه د آنلاین لارو پېرودونکو ته ورسېږي.</p>
+          <button type="button" class="link-button" data-show-topic="export-readiness">د دې موضوع غونډې وګورئ ←</button>
+        </div>
+        <div>
+          <h3 class="topics__list-title">د روزنې ماډیولونه</h3>
+          <ul class="topics__list">
+            <li>ایا زه صادرات کولی شم؟</li>
+            <li>چېرته صادرات وکړم؟</li>
+            <li>زما محصولات به څوک وپېري؟</li>
+            <li>معامله څنګه جوړه کړم؟</li>
+            <li>بار څنګه ورسوم؟</li>
+          </ul>
+        </div>
+      </div>
+      <div class="topics__panel" role="tabpanel" id="topic-finance" aria-labelledby="topic-tab-finance" data-topic-panel="finance">
+        <div class="topics__about">
+          <p>د دې موضوع موخه د تصدیو د دې وړتیا ښه کول دي چې خپل کارونه اداره، رسمي او تمویل کړي. دا موضوع د سوداګرۍ بنسټونه او د سوداګریز ماډل جوړول رامنځته کوي، حساب ساتنه، نغدي جریان او مالي مدیریت پیاوړی کوي، او د سوداګرۍ له رسمي کولو ملاتړ کوي څو شرکتونه په اسانۍ له مالي بنسټونو او لویو پېرودونکو سره کار وکړي. همدارنګه پر خطر مدیریت او ټینګښت ټینګار کوي څو سوداګرۍ د ټکانونو پر وړاندې ودرېږي او دوامداره کار وکړي.</p>
+          <button type="button" class="link-button" data-show-topic="finance">د دې موضوع غونډې وګورئ ←</button>
+        </div>
+        <div>
+          <h3 class="topics__list-title">د روزنې ماډیولونه</h3>
+          <ul class="topics__list">
+            <li>د سوداګرۍ بنسټونه او د سوداګریز ماډل جوړول</li>
+            <li>حساب ساتنه او مالي مدیریت (د غیر مالي مسلکي کسانو لپاره مالي چارې)</li>
+            <li>د سوداګرۍ رسمي کول او له مقرراتو سره سمون</li>
+            <li>تمویل ته لاسرسی او د پانګونې لپاره چمتووالی</li>
+            <li>د خطر مدیریت او د تصدۍ ټینګښت</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Filters ─────────────────────────────────────────────────────────── -->
+  <div class="container">
+    <div class="filters" id="filters">
+      <fieldset class="filter">
+        <legend class="filter__label">د غونډې ډول</legend>
+        <div class="chips">
+          <button type="button" class="chip" data-type="all" aria-pressed="true">ټول</button>
+          <button type="button" class="chip" data-type="training" aria-pressed="false">روزنه</button>
+          <button type="button" class="chip" data-type="b2b" aria-pressed="false">B2B</button>
+          <button type="button" class="chip" data-type="matchmaking" aria-pressed="false">نښلول</button>
+        </div>
+      </fieldset>
+      <fieldset class="filter">
+        <legend class="filter__label">د روزنې موضوع</legend>
+        <div class="chips">
+          <button type="button" class="chip" data-topic="sector" aria-pressed="false">د سکتور ځانګړې</button>
+          <button type="button" class="chip" data-topic="export-readiness" aria-pressed="false">صادراتي چمتووالی</button>
+          <button type="button" class="chip" data-topic="finance" aria-pressed="false">تمویل</button>
+        </div>
+      </fieldset>
+      <div class="filters__end">
+        <div class="filters__count" id="events-count" aria-live="polite"></div>
+        <div class="segmented" role="group" aria-label="د ښودلو بڼه">
+          <button type="button" data-view="list" aria-pressed="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"></path></svg>لېست</button>
+          <button type="button" data-view="calendar" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"></rect><path d="M3 9.5h18M8 2.5v4M16 2.5v4"></path></svg>جنتري</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="events-panel">
+    <div class="container">
+
+      <noscript>
+        <p class="events-empty">د غونډو د لېست لیدو لپاره JavaScript ته اړتیا ده. د راتلونکو روزنو او غونډو د خبر لپاره [HELPLINE] ته زنګ ووهئ یا [WHATSAPP] ته پیغام ولېږئ.</p>
+      </noscript>
+
+      <!-- ── List view ───────────────────────────────────────────────────── -->
+      <div id="list-view">
+        <div class="calendar-switch-row">
+          <div class="segmented segmented--small" role="group" aria-label="د جنترۍ ډول">
+            <button type="button" data-cal="g" aria-pressed="false">میلادي</button>
+            <button type="button" data-cal="s" aria-pressed="true">لمریز هجري</button>
+          </div>
+        </div>
+        <ul class="event-list" id="event-list"></ul>
+      </div>
+
+      <!-- ── Calendar view ───────────────────────────────────────────────── -->
+      <div id="calendar-view" hidden>
+        <div class="calendar">
+          <div class="calendar__main">
+            <div class="calendar__toolbar">
+              <button type="button" class="icon-button" id="cal-prev" aria-label="تېره میاشت"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg></button>
+              <div class="calendar__title" aria-live="polite">
+                <h2 class="calendar__month" id="cal-title"></h2>
+                <div class="calendar__month-alt" id="cal-sub"></div>
+              </div>
+              <button type="button" class="icon-button" id="cal-next" aria-label="راتلونکې میاشت"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg></button>
+              <button type="button" class="text-button" id="cal-today">نن</button>
+              <div class="segmented" role="group" aria-label="د جنترۍ ډول">
+                <button type="button" data-cal="g" aria-pressed="false">میلادي</button>
+                <button type="button" data-cal="s" aria-pressed="true">لمریز هجري</button>
+              </div>
+            </div>
+            <div class="legend">
+              <span><i class="sw-blue"></i>B2B او نښلول</span>
+              <span><i class="sw-amber"></i>روزنه</span>
+              <span><i class="sw-deadline"></i>وروستۍ نېټه</span>
+              <span class="legend__hint">واړه خړ نېټې د بلې جنترۍ نېټې دي</span>
+            </div>
+            <div class="month-grid">
+              <div class="month-grid__head" aria-hidden="true">
+                <div>شنبه</div><div>یکشنبه</div><div>دوشنبه</div><div>سه‌شنبه</div><div>چهارشنبه</div><div>پنجشنبه</div><div>جمعه</div>
+              </div>
+              <div class="month-grid__body" id="month-grid"></div>
+            </div>
+          </div>
+
+          <aside class="calendar__side" aria-label="ټاکلې ورځ">
+            <div class="day-card" id="day-card" aria-live="polite"></div>
+          </aside>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- ── Past, with outcomes ───────────────────────────────────────────── -->
+    <section class="outcomes" aria-labelledby="outcomes-title">
+      <div class="outcomes__head">
+        <h2 class="outcomes__title" id="outcomes-title">د وروستیو غونډو پایلې</h2>
+        <button type="button" class="link-button" id="show-past">ټولې تېرې غونډې ←</button>
+      </div>
+      <ul class="outcomes__grid">
+        <li class="outcome">
+          <div class="outcome__when">12 اګست · کابل</div>
+          <h3 class="outcome__title">د وچې مېوې B2B — هندي واردوونکي</h3>
+          <dl class="outcome__stats">
+            <div><dt>سوداګرۍ</dt><dd>34</dd></div>
+            <div><dt>غونډې وشوې</dt><dd>61</dd></div>
+          </dl>
+        </li>
+        <li class="outcome">
+          <div class="outcome__when">28 جولای · هرات</div>
+          <h3 class="outcome__title">بسته بندي، لیبل لګول او د برانډ وړاندې کول</h3>
+          <dl class="outcome__stats">
+            <div><dt>وروزل شول</dt><dd>48</dd></div>
+            <div><dt>د ښځو په مشرۍ</dt><dd>19</dd></div>
+          </dl>
+        </li>
+        <li class="outcome">
+          <div class="outcome__when">9 جولای · مزار شریف</div>
+          <h3 class="outcome__title">مالي نښلول — غالۍ</h3>
+          <dl class="outcome__stats">
+            <div><dt>سوداګرۍ</dt><dd>22</dd></div>
+            <div><dt>دقیقې ارزونې ته ورسېدې</dt><dd>6</dd></div>
+          </dl>
+        </li>
+      </ul>
+    </section>
+  </div>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="site-footer__main">
+      <div class="site-footer__about">
+        <div class="site-footer__brand">
+          <img class="site-footer__logo" src="../images/logo-amsme.png" width="40" height="39" alt="">
+          د کوچنیو او منځنیو تصدیو د ملاتړ مرکز
+        </div>
+        <p class="site-footer__blurb">د افغان خورا کوچنیو، کوچنیو او منځنیو تصدیو لپاره صادراتي چمتووالی، د بازار معلومات او تمویل ته لاسرسی.</p>
+        <address class="site-footer__contact">
+          <span>چمن حضوري<br>د کابل ننداري ته څېرمه<br>کابل، افغانستان</span>
+        </address>
+      </div>
+
+      <nav class="site-footer__cols" aria-label="د پاڼې لاندې برخه">
+        <div>
+          <h2 class="site-footer__heading">زموږ په اړه</h2>
+          <ul class="site-footer__links">
+            <li><span class="is-soon" title="ژر راځي">اړیکه</span></li>
+          </ul>
+        </div>
+        <div>
+          <h2 class="site-footer__heading">زموږ خدمتونه</h2>
+          <ul class="site-footer__links">
+            <li><a href="events.html?type=training">روزنې</a></li>
+            <li><a href="events.html?type=b2b">B2B غونډې</a></li>
+            <li><a href="events.html">له پانګوالو سره نښلول</a></li>
+            <li><a href="/app">د بازار د معلوماتو وسیله</a></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+
+    <div class="site-footer__bottom">© 2026 د کوچنیو او منځنیو تصدیو د ملاتړ مرکز · <span class="is-soon" title="ژر راځي">محرمیت</span></div>
+  </div>
+</footer>
+
+</body>
+</html>

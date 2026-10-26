@@ -28,6 +28,25 @@
     });
   }
 
+  // ── "Our Services" dropdown: click to open/close; on wide screens hovering
+  // also opens it (CSS). Escape or a click elsewhere closes it.
+  header.querySelectorAll('.site-nav__has-sub').forEach(function (item) {
+    var button = item.querySelector('.site-nav__sub-toggle');
+    function setSub(open) {
+      item.classList.toggle('is-open', open);
+      button.setAttribute('aria-expanded', String(open));
+    }
+    button.addEventListener('click', function () { setSub(!item.classList.contains('is-open')); });
+    document.addEventListener('click', function (e) { if (!item.contains(e.target)) setSub(false); });
+    item.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && item.classList.contains('is-open')) {
+        e.stopPropagation();
+        setSub(false);
+        button.focus();
+      }
+    });
+  });
+
   if (!('IntersectionObserver' in window)) return;
 
   // ── See-through header over the hero photo, solid once it scrolls away ────

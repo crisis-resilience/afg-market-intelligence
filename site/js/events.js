@@ -6,6 +6,10 @@
 // the browser's built-in Persian calendar, which is the calendar Afghanistan
 // uses; only the month names differ, so they are listed here in their Dari
 // form.
+//
+// The same script runs the English page and the Dari and Pashto ones
+// (fa/events.html, ps/events.html): the page's <html lang> picks the wording,
+// and each event's `fa` / `ps` entry in events-data.js supplies its text.
 (function () {
   'use strict';
 
@@ -13,16 +17,101 @@
   if (!app) return;
 
   var DAY = 86400000;
-  var SOLAR_MONTHS = ['Hamal', 'Sawr', 'Jawza', 'Saratan', 'Asad', 'Sunbula', 'Mizan', 'Aqrab', 'Qaws', 'Jadi', 'Dalw', 'Hut'];
-  var G_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  var WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  var TYPES = {
-    training: { label: 'Training', tone: 'amber' },
-    b2b: { label: 'B2B', tone: 'blue' },
-    matchmaking: { label: 'Matchmaking', tone: 'blue' },
-    deadline: { label: 'Deadline', tone: 'deadline' }
+  var LANG = (document.documentElement.lang || 'en').slice(0, 2);   // 'en', 'fa' (Dari) or 'ps' (Pashto)
+  var LOCAL = LANG === 'fa' || LANG === 'ps';
+
+  // Every piece of wording the script writes, in Dari, Pashto and English
+  var T = LANG === 'fa' ? {
+    solarMonths: ['حمل', 'ثور', 'جوزا', 'سرطان', 'اسد', 'سنبله', 'میزان', 'عقرب', 'قوس', 'جدی', 'دلو', 'حوت'],
+    gMonths: ['جنوری', 'فبروری', 'مارچ', 'اپریل', 'می', 'جون', 'جولای', 'اگست', 'سپتمبر', 'اکتوبر', 'نومبر', 'دسمبر'],
+    weekdays: ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
+    types: { training: 'آموزش', b2b: 'B2B', matchmaking: 'ارتباط‌دهی', deadline: 'مهلت' },
+    topics: { 'export-readiness': 'آمادگی صادراتی', finance: 'تمویل', sector: 'ویژهٔ سکتور' },
+    full: 'تکمیل',
+    taken: 'این رویداد برگزار شده است.',
+    registered: 'ثبت‌نام شده',
+    waitlist: 'پیوستن به فهرست انتظار',
+    register: 'ثبت‌نام',
+    registerFor: function (title) { return 'ثبت‌نام برای ' + title; },
+    applyBy: 'درخواست تا ',
+    placesLeft: function (left, cap) { return left + ' جای خالی از ' + cap; },
+    available: 'جای خالی موجود است',
+    checking: 'در حال بررسی جاهای خالی…',
+    notCentreNote: 'رویداد مرکز نیست؛ اینجا آمده تا آن را در کنار سایر موارد ببینید',
+    count: function (n, when) { return n + ' رویداد ' + (when === 'past' ? 'گذشته' : 'پیش رو'); },
+    countIn: function (n, month) { return n + ' رویداد در ' + month; },
+    none: function (when, filtered) {
+      var w = when === 'past' ? 'گذشته' : 'پیش رو';
+      return filtered
+        ? 'هیچ رویداد ' + w + ' با این فیلترها مطابقت ندارد. <button type="button" class="link-button" data-clear-filters>نمایش همه رویدادها</button>'
+        : 'هنوز رویداد ' + w + ' وجود ندارد.';
+    },
+    events: function (n) { return '، ' + n + ' رویداد'; },
+    noEvents: 'در این روز رویدادی نیست.'
+  } : LANG === 'ps' ? {
+    solarMonths: ['وری', 'غویی', 'غبرګولی', 'چنګاښ', 'زمری', 'وږی', 'تله', 'لړم', 'لیندۍ', 'مرغومی', 'سلواغه', 'کب'],
+    gMonths: ['جنوري', 'فبروري', 'مارچ', 'اپریل', 'مې', 'جون', 'جولای', 'اګست', 'سپتمبر', 'اکتوبر', 'نومبر', 'دسمبر'],
+    weekdays: ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'],
+    types: { training: 'روزنه', b2b: 'B2B', matchmaking: 'نښلول', deadline: 'وروستۍ نېټه' },
+    topics: { 'export-readiness': 'صادراتي چمتووالی', finance: 'تمویل', sector: 'د سکتور ځانګړې' },
+    full: 'ډک',
+    taken: 'دا غونډه شوې ده.',
+    registered: 'نوم یې لیکلی',
+    waitlist: 'د انتظار لېست ته ورګډ شئ',
+    register: 'نوم لیکنه',
+    registerFor: function (title) { return 'د ' + title + ' لپاره نوم لیکنه'; },
+    applyBy: 'د غوښتنې وروستۍ نېټه: ',
+    placesLeft: function (left, cap) { return 'له ' + cap + ' ځایونو ' + left + ' پاتې دي'; },
+    available: 'ځای شته',
+    checking: 'د خالي ځایونو کتنه…',
+    notCentreNote: 'د مرکز غونډه نه ده؛ دلته راغلې چې له نورو سره یې یوځای ووینئ',
+    count: function (n, when) { return n + ' ' + (when === 'past' ? 'تېرې غونډې' : 'راتلونکې غونډې'); },
+    countIn: function (n, month) { return n + ' غونډې په ' + month + ' کې'; },
+    none: function (when, filtered) {
+      var w = when === 'past' ? 'تېره' : 'راتلونکې';
+      return filtered
+        ? 'هېڅ ' + w + ' غونډه له دې فلټرونو سره سمون نه لري. <button type="button" class="link-button" data-clear-filters>ټولې غونډې وښایئ</button>'
+        : 'تر اوسه ' + w + ' غونډه نشته.';
+    },
+    events: function (n) { return '، ' + n + ' غونډې'; },
+    noEvents: 'په دې ورځ کومه غونډه نشته.'
+  } : {
+    solarMonths: ['Hamal', 'Sawr', 'Jawza', 'Saratan', 'Asad', 'Sunbula', 'Mizan', 'Aqrab', 'Qaws', 'Jadi', 'Dalw', 'Hut'],
+    gMonths: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+    weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+    types: { training: 'Training', b2b: 'B2B', matchmaking: 'Matchmaking', deadline: 'Deadline' },
+    topics: { 'export-readiness': 'Export readiness', finance: 'Finance', sector: 'Sector specific' },
+    full: 'Full',
+    taken: 'This event has taken place.',
+    registered: 'registered',
+    waitlist: 'Join the waiting list',
+    register: 'Register',
+    registerFor: function (title) { return 'Register for ' + title; },
+    applyBy: 'Apply by ',
+    placesLeft: function (left, cap) { return left + ' of ' + cap + ' places left'; },
+    available: 'Places available',
+    checking: 'Checking places…',
+    notCentreNote: 'Not a Centre event — listed so you see it alongside everything else',
+    count: function (n, when) { return n + ' ' + when; },
+    countIn: function (n, month) { return n + ' in ' + month; },
+    none: function (when, filtered) {
+      return 'No ' + when + ' events' + (filtered ? ' match these filters. <button type="button" class="link-button" data-clear-filters>Show all events</button>' : ' yet.');
+    },
+    events: function (n) { return ', ' + n + (n === 1 ? ' event' : ' events'); },
+    noEvents: 'No events on this day.'
   };
-  var TOPICS = { 'export-readiness': 'Export readiness', finance: 'Finance', sector: 'Sector' };
+
+  var EN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var SOLAR_MONTHS = T.solarMonths;
+  var G_MONTHS = T.gMonths;
+  var WEEKDAYS = T.weekdays;
+  var TYPES = {
+    training: { label: T.types.training, tone: 'amber' },
+    b2b: { label: T.types.b2b, tone: 'blue' },
+    matchmaking: { label: T.types.matchmaking, tone: 'blue' },
+    deadline: { label: T.types.deadline, tone: 'deadline' }
+  };
+  var TOPICS = T.topics;
   var CLOCK = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B8690F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 7v5.5l3.5 2"></path></svg>';
   var CLOCK_SMALL = CLOCK.replace('width="18" height="18"', 'width="11" height="11"').replace('stroke-width="1.9"', 'stroke-width="2.2"');
 
@@ -69,7 +158,8 @@
   }
 
   function pad(n) { return n < 10 ? '0' + n : String(n); }
-  function gShort(m) { return G_MONTHS[m - 1].slice(0, 3); }
+  // Dari and Pashto don't abbreviate month names
+  function gShort(m) { return LOCAL ? G_MONTHS[m - 1] : G_MONTHS[m - 1].slice(0, 3); }
 
   // "12 Oct" or "20 Mizan", in the chosen calendar
   function shortDate(t, sys) {
@@ -96,6 +186,13 @@
   var events = (window.MSME_EVENTS || []).map(function (ev) {
     var copy = {};
     for (var k in ev) copy[k] = ev[k];
+    // On the Dari and Pashto pages, the event's own wording replaces the English
+    if (LOCAL && ev[LANG]) for (var f in ev[LANG]) copy[f] = ev[LANG][f];
+    // How the event is named in the registration form: always the English
+    // title and date, so responses from all three language pages sort together
+    var g = greg(parseDate(ev.date));
+    copy.formLabel = ev.title + ' (' + g.d + ' ' + EN_MONTHS[g.m - 1] + ' ' + g.y + ')';
+    copy.isFree = /^free$/i.test(ev.price || '');
     copy.t = parseDate(ev.date);
     if (ev.applyBy) copy.applyT = parseDate(ev.applyBy);
     copy.isFull = !!ev.capacity && ev.registered >= ev.capacity;
@@ -103,6 +200,11 @@
   }).sort(function (a, b) { return a.t - b.t; });
 
   var today = todayStamp();
+
+  // While the live seat counts are loading, events with a seat limit say
+  // "Checking places…" rather than showing numbers that may be out of date
+  var countsUrl = window.MSME_REGISTRATION && window.MSME_REGISTRATION.countsUrl;
+  var countsPending = !!(countsUrl && window.fetch);
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -116,21 +218,22 @@
   var state = {
     when: params.get('when') === 'past' ? 'past' : 'upcoming',
     view: params.get('view') === 'calendar' ? 'calendar' : 'list',
-    cal: 'g',
+    cal: LOCAL ? 's' : 'g',
     type: TYPES[params.get('type')] && params.get('type') !== 'deadline' ? params.get('type') : 'all',
     topic: TOPICS[params.get('topic')] ? params.get('topic') : null,
-    province: 'all',
     month: null,     // { y, m } in the current calendar system
     selected: null   // timestamp of the selected day in the calendar
   };
-  try { if (localStorage.getItem('msme.calendar') === 's') state.cal = 's'; } catch (e) { /* storage unavailable */ }
+  try {
+    var savedCal = localStorage.getItem('msme.calendar');
+    if (savedCal === 's' || savedCal === 'g') state.cal = savedCal;
+  } catch (e) { /* storage unavailable */ }
 
   function matches(ev) {
     // Deadlines aren't Centre events: show them only when no filter is narrowing the list
-    if (ev.type === 'deadline') return state.type === 'all' && !state.topic && state.province === 'all';
+    if (ev.type === 'deadline') return state.type === 'all' && !state.topic;
     if (state.type !== 'all' && ev.type !== state.type) return false;
     if (state.topic && ev.topic !== state.topic) return false;
-    if (state.province !== 'all' && ev.province !== state.province) return false;
     return true;
   }
 
@@ -140,37 +243,41 @@
     var type = TYPES[ev.type];
     var html = '<span class="tag tag--' + type.tone + '">' + type.label + '</span>';
     if (ev.topic && TOPICS[ev.topic]) html += '<span class="tag tag--topic">' + TOPICS[ev.topic] + '</span>';
-    if (ev.isFull) html += '<span class="tag tag--full">Full</span>';
+    if (ev.isFull) html += '<span class="tag tag--full">' + T.full + '</span>';
     return '<div class="tags">' + html + '</div>';
   }
 
+  // Link to the registration form with the event already filled in
+  function formLink(ev, waitlist) {
+    var form = window.MSME_REGISTRATION;
+    if (!form || !form.formUrl || !form.eventField) return null;
+    return form.formUrl + '?usp=pp_url&' + form.eventField + '=' +
+      encodeURIComponent(ev.formLabel + (waitlist ? ' – waiting list' : ''));
+  }
+  function ownLink(url) { return url && url !== '#' ? url : null; }
+
   function priceHtml(ev) {
     if (!ev.price) return '';
-    return /^free$/i.test(ev.price) ? '<span class="free">' + esc(ev.price) + '</span>' : esc(ev.price);
+    return ev.isFree ? '<span class="free">' + esc(ev.price) + '</span>' : esc(ev.price);
   }
 
   function actionHtml(ev) {
-    if (ev.t < today) return '<div class="event__status">This event has taken place.</div>';
+    if (ev.t < today) return '<div class="event__status">' + T.taken + '</div>';
     var button, status;
     if (ev.isFull) {
-      button = '<span class="button button-primary button-arrow is-disabled" aria-disabled="true">Full</span>';
-      status = '<div class="event__status"><span class="full-count">' + ev.registered + '/' + ev.capacity + '</span> registered</div>';
-      if (ev.waitlistUrl) status += '<a class="event__status text-link" href="' + esc(ev.waitlistUrl) + '">Join the waiting list</a>';
+      button = '<span class="button button-primary button-arrow is-disabled" aria-disabled="true">' + T.full + '</span>';
+      status = '<div class="event__status"><span class="full-count">' + ev.registered + '/' + ev.capacity + '</span> ' + T.registered + '</div>';
+      var waitUrl = ownLink(ev.waitlistUrl) || formLink(ev, true);
+      if (waitUrl) status += '<a class="event__status text-link" href="' + esc(waitUrl) + '" target="_blank" rel="noopener">' + T.waitlist + '</a>';
     } else {
-      button = '<a class="button button-primary button-arrow" href="' + esc(ev.registerUrl || '#') + '" aria-label="Register for ' + esc(ev.title) + '">Register</a>';
-      if (ev.applyT) status = 'Apply by ' + shortDateWithOther(ev.applyT);
-      else if (ev.capacity) status = (ev.capacity - (ev.registered || 0)) + ' of ' + ev.capacity + ' places left';
-      else status = 'Places available';
+      button = '<a class="button button-primary button-arrow" href="' + esc(ownLink(ev.registerUrl) || formLink(ev) || '#') + '" target="_blank" rel="noopener" aria-label="' + esc(T.registerFor(ev.title)) + '">' + T.register + '</a>';
+      if (ev.applyT) status = T.applyBy + shortDateWithOther(ev.applyT);
+      else if (ev.capacity && countsPending) status = T.checking;
+      else if (ev.capacity) status = T.placesLeft(ev.capacity - (ev.registered || 0), ev.capacity);
+      else status = T.available;
       status = '<div class="event__status">' + status + '</div>';
     }
     return button + status;
-  }
-
-  function statusText(ev) {
-    if (ev.type === 'deadline') return 'Not a Centre event';
-    var parts = [esc(ev.place), TYPES[ev.type].label];
-    if (ev.isFull) parts.push('<span class="full-count">Full (' + ev.registered + '/' + ev.capacity + ')</span>');
-    return parts.join(' · ');
   }
 
   // ── List view ──────────────────────────────────────────────────────────────
@@ -179,7 +286,7 @@
     if (ev.type === 'deadline') {
       return '<li class="event event--deadline"><div class="event__date">' + dateBox(ev.t) + '</div>' +
         '<div class="event__body">' + CLOCK + '<div><h3 class="event__title">' + esc(ev.title) + '</h3>' +
-        '<p class="event__note">Not a Centre event — listed so you see it alongside everything else</p></div></div></li>';
+        '<p class="event__note">' + T.notCentreNote + '</p></div></div></li>';
     }
     var meta = [ev.place, ev.time, ev.language].filter(Boolean).map(function (m) { return '<span>' + esc(m) + '</span>'; });
     if (ev.price) meta.push('<span>' + priceHtml(ev) + '</span>');
@@ -199,13 +306,13 @@
 
     var real = list.filter(function (ev) { return ev.type !== 'deadline'; }).length;
     if (state.view === 'list') {
-      document.getElementById('events-count').textContent = real + ' ' + state.when;
+      document.getElementById('events-count').textContent = T.count(real, state.when);
     }
 
     var el = document.getElementById('event-list');
     if (!list.length) {
-      var filtered = state.type !== 'all' || state.topic || state.province !== 'all';
-      el.innerHTML = '<li class="events-empty">No ' + state.when + ' events' + (filtered ? ' match these filters. <button type="button" class="link-button" data-clear-filters>Show all events</button>' : ' yet.') + '</li>';
+      var filtered = state.type !== 'all' || state.topic;
+      el.innerHTML = '<li class="events-empty">' + T.none(state.when, filtered) + '</li>';
       return;
     }
     el.innerHTML = list.map(eventItem).join('');
@@ -270,7 +377,7 @@
       return '<span class="cal-chip cal-chip--deadline">' + CLOCK_SMALL + '<span>' + esc(ev.short || ev.title) + '</span></span>';
     }
     var html = '<span class="cal-chip cal-chip--' + TYPES[ev.type].tone + '">' + esc(ev.short || ev.title) + '</span>';
-    if (ev.isFull) html += '<span class="cal-full">Full · <span>' + ev.registered + '/' + ev.capacity + '</span></span>';
+    if (ev.isFull) html += '<span class="cal-full">' + T.full + ' · <span>' + ev.registered + '/' + ev.capacity + '</span></span>';
     return html;
   }
 
@@ -286,7 +393,7 @@
 
     if (state.view === 'calendar') {
       var n = visible.filter(function (ev) { return ev.type !== 'deadline' && ev.t >= range.start && ev.t < range.end; }).length;
-      document.getElementById('events-count').textContent = n + ' in ' + titles.title.split(' ')[0];
+      document.getElementById('events-count').textContent = T.countIn(n, titles.title.split(' ')[0]);
     }
 
     // Weeks start on Saturday; Friday is the last column
@@ -305,7 +412,7 @@
       if (t < range.start || t >= range.end) classes.push('is-outside');
       if (t === today) classes.push('is-today');
       if (t === state.selected) classes.push('is-selected');
-      var label = longDate(t, state.cal).full + (dayEvents.length ? ', ' + dayEvents.length + (dayEvents.length === 1 ? ' event' : ' events') : '');
+      var label = longDate(t, state.cal).full + (dayEvents.length ? T.events(dayEvents.length) : '');
       cells.push(
         '<button type="button" class="' + classes.join(' ') + '" data-day="' + t + '" aria-label="' + esc(label) + '"' +
         (t === state.selected ? ' aria-pressed="true"' : ' aria-pressed="false"') + '>' +
@@ -319,26 +426,18 @@
     document.getElementById('month-grid').innerHTML = cells.join('');
 
     renderDayCard(byDay[state.selected] || []);
-
-    var others = visible.filter(function (ev) { return ev.t >= range.start && ev.t < range.end && ev.t !== state.selected; });
-    document.getElementById('month-list').innerHTML = others.length
-      ? others.map(function (ev) {
-          return '<li><button type="button" data-day="' + ev.t + '">' + dateBox(ev.t) +
-            '<span><span class="month-list__name">' + esc(ev.title) + '</span><br><span class="month-list__sub">' + statusText(ev) + '</span></span></button></li>';
-        }).join('')
-      : '<li><p class="day-card__empty month-list__empty">Nothing else this month.</p></li>';
   }
 
   function renderDayCard(dayEvents) {
     var d = longDate(state.selected, state.cal);
     var html = '<div><div class="day-card__date">' + esc(d.main) + '</div><div class="day-card__alt">' + esc(d.alt) + '</div></div>';
     if (!dayEvents.length) {
-      html += '<p class="day-card__empty">No events on this day.</p>';
+      html += '<p class="day-card__empty">' + T.noEvents + '</p>';
     }
     dayEvents.forEach(function (ev) {
       if (ev.type === 'deadline') {
         html += '<div class="day-card__event"><h3 class="day-card__title">' + esc(ev.title) + '</h3>' +
-          '<p class="day-card__desc">Not a Centre event — listed so you see it alongside everything else.</p></div>';
+          '<p class="day-card__desc">' + T.notCentreNote + '.</p></div>';
         return;
       }
       var line2 = [ev.time, ev.language].filter(Boolean).map(esc);
@@ -350,6 +449,36 @@
         '<div class="event__action">' + actionHtml(ev) + '</div></div>';
     });
     document.getElementById('day-card').innerHTML = html;
+  }
+
+  // ── Training topics tabs ───────────────────────────────────────────────────
+
+  var topicTabs = Array.prototype.slice.call(app.querySelectorAll('[data-topic-tab]'));
+
+  function showTopicTab(topic, focus) {
+    topicTabs.forEach(function (tab) {
+      var on = tab.getAttribute('data-topic-tab') === topic;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+      if (on && focus) tab.focus();
+    });
+    app.querySelectorAll('[data-topic-panel]').forEach(function (panel) {
+      panel.hidden = panel.getAttribute('data-topic-panel') !== topic;
+    });
+  }
+
+  // Arrow keys move between tabs; on right-to-left pages "next" is to the left
+  if (topicTabs.length) {
+    topicTabs[0].parentNode.addEventListener('keydown', function (e) {
+      var i = topicTabs.indexOf(document.activeElement);
+      if (i < 0) return;
+      var rtl = getComputedStyle(app).direction === 'rtl';
+      var step = { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1 }[e.key];
+      var next = e.key === 'Home' ? 0 : e.key === 'End' ? topicTabs.length - 1 : step ? (i + step + topicTabs.length) % topicTabs.length : -1;
+      if (next < 0) return;
+      e.preventDefault();
+      showTopicTab(topicTabs[next].getAttribute('data-topic-tab'), true);
+    });
   }
 
   // ── Controls ───────────────────────────────────────────────────────────────
@@ -366,9 +495,11 @@
     setPressed('[data-cal]', 'data-cal', state.cal);
     setPressed('[data-type]', 'data-type', state.type);
     setPressed('[data-topic]', 'data-topic', state.topic || '');
-    document.getElementById('province').value = state.province;
+    if (state.topic && topicTabs.length) showTopicTab(state.topic);
     document.getElementById('list-view').hidden = state.view !== 'list';
     document.getElementById('calendar-view').hidden = state.view !== 'calendar';
+    // The calendar sits on a light grey background; the list stays on white
+    document.querySelector('.events-panel').classList.toggle('is-calendar', state.view === 'calendar');
     renderList();
     renderCalendar();
   }
@@ -378,20 +509,22 @@
     state.selected = defaultSelection(monthRange(month));
   }
 
-  // Province options come from the events themselves
-  var provinceSelect = document.getElementById('province');
-  events.map(function (ev) { return ev.province; }).filter(Boolean)
-    .filter(function (p, i, all) { return all.indexOf(p) === i; })
-    .sort()
-    .forEach(function (p) {
-      var opt = document.createElement('option');
-      opt.value = p; opt.textContent = p;
-      provinceSelect.appendChild(opt);
-    });
-
   app.addEventListener('click', function (e) {
     var b = e.target.closest('button');
     if (!b) return;
+    if (b.hasAttribute('data-topic-tab')) {
+      showTopicTab(b.getAttribute('data-topic-tab'));
+      return;
+    }
+    if (b.hasAttribute('data-show-topic')) {
+      // "See events on this topic": set the Topic filter and jump to the list
+      state.topic = b.getAttribute('data-show-topic');
+      state.when = 'upcoming';
+      openMonth(state.month);
+      render();
+      document.getElementById('filters').scrollIntoView({ block: 'start' });
+      return;
+    }
     if (b.hasAttribute('data-when')) {
       state.when = b.getAttribute('data-when');
       state.view = 'list';
@@ -410,7 +543,7 @@
       state.topic = state.topic === topic ? null : topic;
       openMonth(state.month);
     } else if (b.hasAttribute('data-clear-filters')) {
-      state.type = 'all'; state.topic = null; state.province = 'all';
+      state.type = 'all'; state.topic = null;
       openMonth(state.month);
     } else if (b.hasAttribute('data-day')) {
       var t = +b.getAttribute('data-day');
@@ -434,12 +567,30 @@
     render();
   });
 
-  provinceSelect.addEventListener('change', function () {
-    state.province = provinceSelect.value;
-    openMonth(state.month);
-    render();
-  });
-
+  showTopicTab(state.topic || (topicTabs[0] && topicTabs[0].getAttribute('data-topic-tab')));
   openMonth(monthOf(today));
   render();
+
+  // Seats taken, counted live from the registration sheet (numbers only).
+  // Until they arrive, or if the sheet can't be reached, the page shows the
+  // numbers in events-data.js.
+  if (countsUrl && window.fetch) {
+    fetch(countsUrl)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var counts = (d && d.counts) || {};
+        events.forEach(function (ev) {
+          if (!ev.capacity) return;
+          ev.registered = counts[ev.formLabel] || 0;
+          ev.isFull = ev.registered >= ev.capacity;
+        });
+        countsPending = false;
+        render();
+      })
+      .catch(function () {
+        // Sheet unreachable: show the numbers from events-data.js instead
+        countsPending = false;
+        render();
+      });
+  }
 })();
