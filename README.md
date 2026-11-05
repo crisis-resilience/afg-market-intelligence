@@ -179,7 +179,7 @@ afg-market-intelligence/
 │   └── verify.py                # DB sanity checks + optional live spot-checks
 │
 ├── migrations/
-│   └── versions/               # 0001–0011; see HANDOVER.md §3 for what each adds
+│   └── versions/               # 0001–0011
 │
 ├── backend/
 │   ├── main.py                  # FastAPI app
