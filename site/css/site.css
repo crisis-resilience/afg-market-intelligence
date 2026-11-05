@@ -343,8 +343,11 @@ a.pill--ghost:hover { color: var(--white); background: rgba(35,46,61,.55); }
 /* Each pillar opens its training topic on the Trainings & Events page */
 .pillar__link { display: flex; flex-direction: column; align-items: inherit; text-align: inherit; color: inherit; text-decoration: none; }
 .pillar__link:hover .pillar__title, .pillar__link:focus-visible .pillar__title { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
-.pillar__num { font-size: calc(20 * var(--u)); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
-.pillar__title { font-size: calc(27 * var(--u)); font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; margin: calc(8 * var(--u)) 0 0; color: var(--ink); }
+.pillar__num { font-size: calc(25 * var(--u)); font-weight: 600; letter-spacing: -0.015em; line-height: 1.15; color: var(--blue); }
+/* The pillar's training topic, after its number: "1 · Sector Specific". This
+   line is the pillar's main title; .pillar__title is the smaller subtitle. */
+.pillar__topic::before { content: "·"; margin: 0 .3em; }
+.pillar__title { font-size: calc(20 * var(--u)); font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; margin: calc(8 * var(--u)) 0 0; color: var(--ink); }
 .pillar__text { margin: calc(12 * var(--u)) 0 0; font-size: calc(18 * var(--u)); line-height: 1.5; color: var(--muted); }
 
 /* Phones: separate layout. The designed composition scales as one piece down
@@ -365,8 +368,8 @@ a.pill--ghost:hover { color: var(--white); background: rgba(35,46,61,.55); }
     background: var(--white); border: 1px solid var(--line); border-top: 3px solid var(--blue);
     padding: 24px;
   }
-  .pillar__num { font-size: 14px; }
-  .pillar__title { font-size: 22px; margin-top: 6px; }
+  .pillar__num { font-size: 22px; }
+  .pillar__title { font-size: 17px; margin-top: 6px; }
   .pillar__text { font-size: 16px; margin-top: 10px; }
 }
 @media (max-width: 760px) {
@@ -545,6 +548,10 @@ a.pill--ghost:hover { color: var(--white); background: rgba(35,46,61,.55); }
   display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; align-items: start;
 }
 .topics__panel[hidden] { display: none; }
+/* B2B / investor matchmaking explanation: one column, no tabs above it */
+.topics__panel--single { grid-template-columns: 1fr; border-top: 1px solid var(--line); }
+.topics__panel--single .topics__about p { margin: 0; max-width: 80ch; }
+.topics[hidden] { display: none; }
 .topics__about p { font-size: 15.5px; line-height: 1.65; color: var(--muted); margin: 0 0 18px; }
 .topics__list-title { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
 .topics__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }

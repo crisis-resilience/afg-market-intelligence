@@ -43,7 +43,7 @@
           <ul class="site-nav__sub" id="nav-services">
             <li><a href="events.html?type=training">Trainings</a></li>
             <li><a href="events.html?type=b2b">B2B Meetings</a></li>
-            <li><a href="events.html">Investor Matchmaking</a></li>
+            <li><a href="events.html?type=matchmaking">Investor Matchmaking</a></li>
             <li><a href="/app">Market Intelligence Tool</a></li>
           </ul>
         </li>
@@ -87,7 +87,7 @@
        without JavaScript all three panels simply show one after another) ── -->
   <section id="topics" class="topics" aria-labelledby="topics-title">
     <div class="container">
-      <h2 class="topics__title" id="topics-title">Training topics</h2>
+      <h2 class="topics__title" id="topics-title">Courses by category</h2>
       <div class="topics__tabs" role="tablist" aria-labelledby="topics-title">
         <button type="button" role="tab" id="topic-tab-sector" aria-controls="topic-sector" aria-selected="true" tabindex="0" data-topic-tab="sector">Sector Specific</button>
         <button type="button" role="tab" id="topic-tab-export-readiness" aria-controls="topic-export-readiness" aria-selected="false" tabindex="-1" data-topic-tab="export-readiness">Export Readiness</button>
@@ -144,6 +144,26 @@
     </div>
   </section>
 
+  <!-- ── About B2B meetings and investor matchmaking: shown instead of the
+       training topics when the Event type filter is set to one of them
+       (js/events.js) ── -->
+  <section class="topics" data-about-type="b2b" aria-labelledby="about-b2b-title" hidden>
+    <div class="container">
+      <h2 class="topics__title" id="about-b2b-title">B2B Meetings</h2>
+      <div class="topics__panel topics__panel--single">
+        <div class="topics__about"><p>The B2B Meetings programme brings together MSMEs, buyers, suppliers and institutional partners in structured business networking sessions. These sessions are designed to facilitate new commercial partnerships, market linkages and collaboration opportunities across sectors.</p></div>
+      </div>
+    </div>
+  </section>
+  <section class="topics" data-about-type="matchmaking" aria-labelledby="about-matchmaking-title" hidden>
+    <div class="container">
+      <h2 class="topics__title" id="about-matchmaking-title">Investor Matchmaking</h2>
+      <div class="topics__panel topics__panel--single">
+        <div class="topics__about"><p>The Investor Matchmaking service connects investment-ready MSMEs with investors whose priorities align with their sector, stage of growth and financing needs. The Centre facilitates this process to support access to finance and sustainable business growth.</p></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Filters ─────────────────────────────────────────────────────────── -->
   <div class="container">
     <div class="filters" id="filters">
@@ -153,11 +173,11 @@
           <button type="button" class="chip" data-type="all" aria-pressed="true">All</button>
           <button type="button" class="chip" data-type="training" aria-pressed="false">Training</button>
           <button type="button" class="chip" data-type="b2b" aria-pressed="false">B2B</button>
-          <button type="button" class="chip" data-type="matchmaking" aria-pressed="false">Matchmaking</button>
+          <button type="button" class="chip" data-type="matchmaking" aria-pressed="false">Investor matchmaking</button>
         </div>
       </fieldset>
       <fieldset class="filter">
-        <legend class="filter__label">Training topic</legend>
+        <legend class="filter__label">Course categories</legend>
         <div class="chips">
           <button type="button" class="chip" data-topic="sector" aria-pressed="false">Sector specific</button>
           <button type="button" class="chip" data-topic="export-readiness" aria-pressed="false">Export readiness</button>
@@ -296,14 +316,14 @@
           <ul class="site-footer__links">
             <li><a href="events.html?type=training">Trainings</a></li>
             <li><a href="events.html?type=b2b">B2B Meetings</a></li>
-            <li><a href="events.html">Investor Matchmaking</a></li>
+            <li><a href="events.html?type=matchmaking">Investor Matchmaking</a></li>
             <li><a href="/app">Market Intelligence Tool</a></li>
           </ul>
         </div>
       </nav>
     </div>
 
-    <div class="site-footer__bottom">© 2026 MSME Support Centre · <span class="is-soon" title="Coming soon">Privacy</span></div>
+    <div class="site-footer__bottom">© 2026 MSME Support Centre</div>
   </div>
 </footer>
 
