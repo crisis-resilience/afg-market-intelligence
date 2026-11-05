@@ -21,23 +21,26 @@ PRICE_COMPETITIVENESS = {
 
 # ── Opportunity score weights (must sum to 1.0) ────────────────────────────────
 # Each dimension is normalised to 0–100 before weighting.
+# Equal by default. Users re-weight the dimensions themselves in the app
+# (frontend/lib/scoring.ts, whose default is these same equal weights), so the
+# stored opportunity_score is the app's default score; keep the two in step.
 OPPORTUNITY_SCORE_WEIGHTS = {
-    "market_size": 0.20,         # global import volume for the product
-    "market_growth": 0.18,       # CAGR of global imports in this market
-    "market_quality": 0.13,      # World Bank governance + LPI composite
-    "price_competitiveness": 0.13,  # Afghan price vs market average
-    "tariff": 0.12,              # effective import tariff rate from WITS
-    "afg_foothold": 0.10,        # existing Afghan export presence
-    "distance": 0.10,            # geographic proximity to Kabul
-    "language": 0.04,            # language / cultural similarity
+    "market_size": 0.125,        # global import volume for the product
+    "market_growth": 0.125,      # CAGR of Afghanistan's exports to this market
+    "market_quality": 0.125,     # World Bank governance + LPI composite
+    "price_competitiveness": 0.125,  # Afghan price vs market average
+    "tariff": 0.125,             # effective import tariff rate from WITS
+    "afg_foothold": 0.125,       # existing Afghan export presence
+    "distance": 0.125,           # geographic proximity to Kabul
+    "language": 0.125,           # language / cultural similarity
 }
 # fta_status (preferential trade access) is deliberately excluded from the
 # composite: WITS's AFG-specific (partner=004) tariff schedule returns
 # "NoRecordsFound" for every reporter checked (India, Pakistan, Iran,
 # Germany, Turkiye, Bangladesh), so has_fta is False and score_fta is 0 for
-# 100% of rows in practice -- a weight that can never move the score. Its
-# 0.02 share was folded into "tariff" above, which already prices in the
-# actual applied rate WITS does report (AHS or MFN). score_fta/has_fta are
+# 100% of rows in practice -- a weight that can never move the score.
+# "tariff" above already prices in the actual applied rate WITS does report
+# (AHS or MFN). score_fta/has_fta are
 # still computed and stored (etl/transform.py, indicators table) in case
 # WITS coverage improves -- just not weighted into opportunity_score.
 

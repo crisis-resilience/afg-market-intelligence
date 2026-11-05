@@ -16,12 +16,12 @@ export async function getProducts(): Promise<ProductSummary[]> {
   return (await apiFetch<ProductSummary[]>('/api/products')) ?? []
 }
 
-export async function getDiscoveryResult(
-  hsCode: string,
-  minScore?: number,
-): Promise<DiscoveryResult | null> {
-  const params = minScore != null ? `?min_score=${minScore}` : ''
-  return apiFetch<DiscoveryResult>(`/api/discover/${hsCode}${params}`)
+// Every scored market (the API's default is the top 50 by the stored score):
+// the app re-ranks them with the user's weights, so a market outside the
+// stored top 50 can still rank high. 200 is the API's maximum; the most any
+// product has is 75 (Dried Grapes, October 2026 ETL).
+export async function getDiscoveryResult(hsCode: string): Promise<DiscoveryResult | null> {
+  return apiFetch<DiscoveryResult>(`/api/discover/${hsCode}?limit=200`)
 }
 
 export async function getMarketProfile(

@@ -2,7 +2,9 @@ import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import { getMarketProfile } from '@/lib/api'
 import { formatUSD, formatPct, formatScore, scoreColor, scoreLevel } from '@/lib/utils'
-import { SCORE_DIMENSIONS } from '@/lib/scoring'
+import {
+  SCORE_DIMENSIONS, factorWeights, isDefaultImportance, opportunityScore, parseImportance, withImportance,
+} from '@/lib/scoring'
 import ScoreBar from '@/components/ScoreBar'
 import NextSteps, { ExternalLink } from '@/components/NextSteps'
 import InfoTooltip from '@/components/InfoTooltip'
@@ -38,6 +40,13 @@ export default async function MarketProfilePage(
   const profile = await getMarketProfile(hs_code, market_code)
   if (!profile) notFound()
 
+  // Same weights as the Compare-markets list (the `w` parameter its links
+  // carry; equal by default), so the score here matches the list
+  const importance = parseImportance((await props.searchParams)?.w)
+  const score = opportunityScore(profile.score_breakdown, importance)
+  const weights = factorWeights(profile.score_breakdown, importance)
+  const compareHref = withImportance(`/discover/${hs_code}`, importance)
+
   // `name` is the bare country name for titles and the breadcrumb; `market`
   // reads mid-sentence ("the United Kingdom"), `Market` starts a sentence.
   const name = profile.market_name ?? market_code
@@ -50,7 +59,7 @@ export default async function MarketProfilePage(
   const year = profile.computed_for_year
   const trade = profile.trade
   const ctx = profile.context
-  const level = scoreLevel(profile.opportunity_score)
+  const level = scoreLevel(score)
 
   // Trade figures fall back to this market's own most recent reported year
   // when computed_for_year's data hasn't landed at Comtrade yet -- each card
@@ -84,7 +93,7 @@ export default async function MarketProfilePage(
 
   return (
     <>
-      <ToolSteps current={3} links={['/', `/discover/${hs_code}`]} />
+      <ToolSteps current={3} links={['/', compareHref]} />
 
       {/* ── Title on the photo ─────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-ink min-h-[600px] pb-[330px]">
@@ -94,7 +103,7 @@ export default async function MarketProfilePage(
             <Breadcrumb
               trail={[
                 { label: 'Find your market', href: '/' },
-                { label: productName, href: `/discover/${hs_code}` },
+                { label: productName, href: compareHref },
                 { label: name },
               ]}
             />
@@ -108,7 +117,7 @@ export default async function MarketProfilePage(
           <div className={`self-start shrink-0 flex flex-col gap-2 bg-[rgba(35,46,61,.7)] border-l-4 ${level ? SCORE_ACCENT[level] : 'border-grey'} px-[22px] pt-4 pb-[18px]`}>
             <span className="text-xs font-semibold tracking-[0.08em] uppercase text-white/80">Opportunity score</span>
             <span className="flex items-baseline gap-2">
-              <span className="text-5xl font-semibold leading-none text-white">{formatScore(profile.opportunity_score)}</span>
+              <span className="text-5xl font-semibold leading-none text-white">{formatScore(score)}</span>
               <span className="text-sm text-white/80">/ 100{level ? ` · ${level}` : ''}</span>
             </span>
           </div>
@@ -363,11 +372,19 @@ export default async function MarketProfilePage(
 
       <Band tone="white">
         {/* ── Why this score ────────────────────────────────────────────────── */}
-        <Section id="why" title="Why this score?" lead="The opportunity score combines eight factors, each weighted by how much it matters.">
+        <Section
+          id="why"
+          title="Why this score?"
+          lead={
+            isDefaultImportance(importance)
+              ? 'The opportunity score combines eight factors, all counting equally. The share each one has in this score is shown on the right.'
+              : 'The opportunity score combines eight factors, weighted by the importance you chose on the Compare markets page. The share each one has in this score is shown on the right.'
+          }
+        >
           <div className="mt-5 bg-white border border-line px-5 sm:px-7 pt-1 pb-2">
             <div className="flex flex-wrap items-baseline gap-x-[18px] gap-y-1 py-[18px] border-b border-line">
               <span className="text-xs font-semibold tracking-[0.08em] uppercase text-muted">Opportunity score</span>
-              <span className={`text-[30px] font-semibold ${scoreColor(profile.opportunity_score)}`}>{formatScore(profile.opportunity_score)}</span>
+              <span className={`text-[30px] font-semibold ${scoreColor(score)}`}>{formatScore(score)}</span>
               <span className="text-sm text-muted">out of 100{level ? ` · ${level}` : ''}</span>
             </div>
             <div className="pt-5 pb-4">
@@ -379,7 +396,8 @@ export default async function MarketProfilePage(
                     label={dim.label}
                     labelWidth={170}
                     score={profile.score_breakdown[dim.key]}
-                    weight={dim.weight}
+                    // 0 for a factor that was ignored or has no data here
+                    weight={weights[dim.key] ?? 0}
                     displayValue={
                       dim.key === 'tariff' && ctx.tariff_rate_pct != null ? `${ctx.tariff_rate_pct.toFixed(1)}%` : undefined
                     }

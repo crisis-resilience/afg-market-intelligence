@@ -140,6 +140,7 @@ flowchart LR
 | US-1.2 | MSME exporter | see a single 0–100 score per market                             | I can compare markets at a glance without reading raw trade data |
 | US-1.3 | MSME exporter | see why each market scored the way it did (dimension breakdown) | I understand the drivers behind the ranking                      |
 | US-1.4 | TIO           | filter markets by minimum score threshold                       | I can focus advisory sessions on high-potential markets          |
+| US-1.6 | MSME exporter | say how much each factor matters to me and see the ranking update | the ranking reflects my own priorities (e.g. low tariffs over market size) |
 | US-1.5 | Donor         | see the data year used for scoring                              | I know how current the analysis is                               |
 
 
@@ -152,10 +153,12 @@ flowchart LR
 | FR-1.2 | The user shall be able to search products by name or HS code and filter by product category.                                                                                                                                                          |
 | FR-1.3 | Upon product selection, the system shall return all scored destination markets ordered by Opportunity Score descending.                                                                                                                               |
 | FR-1.4 | Each market row shall display: rank, market name, composite score (0–100), eight dimension sub-scores, key trade metrics (global imports, Afghan exports, CAGR, market share), FTA flag, and tariff rate where available.                              |
-| FR-1.5 | The composite score shall be computed from eight weighted dimensions: market size (20%), market growth (18%), market quality (13%), price competitiveness (13%), tariff (12%), Afghan foothold (10%), proximity (10%), language (4%). FTA access (`score_fta`) is computed and stored per market but excluded from the composite — see `docs/specs/DATA_SPECIFICATION.md` §4.6. |
-| FR-1.6 | The user shall be able to filter the ranked list by minimum score (presets: all, ≥40, ≥60, ≥70).                                                                                                                                                      |
+| FR-1.5 | The composite score shall be computed from eight weighted dimensions: market size, market growth, market quality, price competitiveness, tariff, Afghan foothold, proximity, language. **By default all eight count equally (12.5% each).** A dimension with no data for a market is left out and its share spread over the others (e.g. 20% each when three are missing). FTA access (`score_fta`) is computed and stored per market but excluded from the composite — see `docs/specs/DATA_SPECIFICATION.md` §4.6. |
+| FR-1.5a | The user shall be able to set each dimension's importance (Ignore / Less important / Important / Very important; default Important). Each dimension's weight is its level divided by the sum of the levels; the scores and ranking shall update immediately, without reloading data, and the resulting share of each dimension shall be shown. A "Reset to equal" control shall restore the default. |
+| FR-1.5b | The chosen weights shall carry over to the market profile (its score and "Why this score?" shares) and be kept in the page URL (`w` parameter), so a refresh or shared link shows the same ranking. |
+| FR-1.6 | The user shall be able to filter the ranked list by minimum score (presets: all, ≥40, ≥60, ≥70), applied to the score under the current weights.                                                                                                     |
 | FR-1.7 | Score colour coding shall indicate bands: ≥70 High (green), 40–70 Moderate (amber), <40 Low (red).                                                                                                                                                    |
-| FR-1.8 | The system shall expose ranked markets via `GET /api/discover/{hs_code}` with optional `limit` (1–200, default 50) and `min_score` (0–100) query parameters.                                                                                          |
+| FR-1.8 | The system shall expose ranked markets via `GET /api/discover/{hs_code}` with optional `limit` (1–200, default 50) and `min_score` (0–100) query parameters. These rank and filter by the score the ETL stores (`config.OPPORTUNITY_SCORE_WEIGHTS`, equal by default); the app requests every market (`limit=200`) with its eight dimension scores and applies FR-1.5–FR-1.6 itself. |
 | FR-1.9 | The system shall display the `computed_for_year` indicating which trade year the scores are based on.                                                                                                                                                 |
 
 
@@ -163,8 +166,11 @@ flowchart LR
 
 - [ ] All 34 products appear in the product catalogue with correct HS codes and categories.
 - [ ] Selecting Saffron (HS `091020`) returns a ranked market list with Germany, India, or similar high-scoring markets visible.
-- [ ] Each market shows all nine score dimension bars with correct weights displayed.
-- [ ] Filtering by `min_score=70` returns only markets scoring 70 or above.
+- [ ] Each market shows all eight score dimension bars.
+- [ ] On first load every dimension counts equally, and each market's score equals the average of its available dimension scores.
+- [ ] Changing a dimension's importance re-scores and re-orders the markets immediately; "Reset to equal" restores the default ranking.
+- [ ] A market profile opened from the list shows the same score as the list, under the same weights.
+- [ ] Filtering by score ≥ 70 shows only markets scoring 70 or above under the current weights.
 - [ ] API returns HTTP 404 when an unknown HS code is requested.
 - [ ] Scores are reproducible from the same ETL run (deterministic given fixed input data).
 
@@ -172,8 +178,9 @@ flowchart LR
 
 - Backend: `backend/services/discovery.py` — `get_ranked_markets()`
 - API: `GET /api/discover/{hs_code}`
-- Frontend: `frontend/app/discover/[hs_code]/page.tsx`
-- Scoring weights: `config.py` → `OPPORTUNITY_SCORE_WEIGHTS`
+- Frontend: `frontend/app/discover/[hs_code]/page.tsx`, `frontend/components/MarketRanking.tsx` (ranking + filter), `frontend/components/WeightsPanel.tsx` (importance sliders)
+- Scoring in the app: `frontend/lib/scoring.ts` → `opportunityScore()`, `factorWeights()` (equal weights by default)
+- Weights of the stored `opportunity_score` (same equal default; keep in step with `scoring.ts`): `config.py` → `OPPORTUNITY_SCORE_WEIGHTS`
 
 ---
 

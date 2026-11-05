@@ -224,6 +224,7 @@
     month: null,     // { y, m } in the current calendar system
     selected: null   // timestamp of the selected day in the calendar
   };
+  if (state.topic) state.type = 'training';
   try {
     var savedCal = localStorage.getItem('msme.calendar');
     if (savedCal === 's' || savedCal === 'g') state.cal = savedCal;
@@ -496,6 +497,12 @@
     setPressed('[data-type]', 'data-type', state.type);
     setPressed('[data-topic]', 'data-topic', state.topic || '');
     if (state.topic && topicTabs.length) showTopicTab(state.topic);
+    // The training topics show only for Training; B2B and investor
+    // matchmaking have their own explanation; All shows none of them
+    var about = app.querySelector('[data-about-type="' + state.type + '"]');
+    app.querySelectorAll('[data-about-type]').forEach(function (s) { s.hidden = s !== about; });
+    var topicsSection = document.getElementById('topics');
+    if (topicsSection) topicsSection.hidden = state.type !== 'training';
     document.getElementById('list-view').hidden = state.view !== 'list';
     document.getElementById('calendar-view').hidden = state.view !== 'calendar';
     // The calendar sits on a light grey background; the list stays on white
@@ -519,6 +526,7 @@
     if (b.hasAttribute('data-show-topic')) {
       // "See events on this topic": set the Topic filter and jump to the list
       state.topic = b.getAttribute('data-show-topic');
+      state.type = 'training';
       state.when = 'upcoming';
       openMonth(state.month);
       render();
@@ -537,10 +545,14 @@
       state.month = monthOf(anchor);
     } else if (b.hasAttribute('data-type')) {
       state.type = b.getAttribute('data-type');
+      // ...and any other type clears the course category
+      if (state.type !== 'training') state.topic = null;
       openMonth(state.month);
     } else if (b.hasAttribute('data-topic')) {
       var topic = b.getAttribute('data-topic');
       state.topic = state.topic === topic ? null : topic;
+      // Course categories are training topics, so picking one selects Training
+      if (state.topic) state.type = 'training';
       openMonth(state.month);
     } else if (b.hasAttribute('data-clear-filters')) {
       state.type = 'all'; state.topic = null;

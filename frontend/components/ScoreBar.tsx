@@ -1,4 +1,5 @@
 import { scoreBarColor, scoreColor } from '@/lib/utils'
+import { formatShare } from '@/lib/scoring'
 
 interface ScoreBarProps {
   label: string
@@ -34,7 +35,7 @@ export default function ScoreBar({ label, score, weight, labelWidth = 118, displ
         {hasData ? (displayValue ?? Math.round(pct)) : '—'}
       </span>
       {weight != null && (
-        <span className="w-[34px] shrink-0 text-right font-mono text-[11.5px] text-grey">{(weight * 100).toFixed(0)}%</span>
+        <span className="w-[40px] shrink-0 text-right font-mono text-[11.5px] text-grey">{formatShare(weight)}</span>
       )}
     </div>
   )

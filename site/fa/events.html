@@ -46,7 +46,7 @@
           <ul class="site-nav__sub" id="nav-services">
             <li><a href="events.html?type=training">آموزش‌ها</a></li>
             <li><a href="events.html?type=b2b">جلسات B2B</a></li>
-            <li><a href="events.html">ارتباط‌دهی با سرمایه‌گذاران</a></li>
+            <li><a href="events.html?type=matchmaking">ارتباط‌دهی با سرمایه‌گذاران</a></li>
             <li><a href="/app">ابزار معلومات بازار</a></li>
           </ul>
         </li>
@@ -90,7 +90,7 @@
        without JavaScript all three panels simply show one after another) ── -->
   <section id="topics" class="topics" aria-labelledby="topics-title">
     <div class="container">
-      <h2 class="topics__title" id="topics-title">موضوعات آموزشی</h2>
+      <h2 class="topics__title" id="topics-title">دوره‌ها بر اساس دسته‌بندی</h2>
       <div class="topics__tabs" role="tablist" aria-labelledby="topics-title">
         <button type="button" role="tab" id="topic-tab-sector" aria-controls="topic-sector" aria-selected="true" tabindex="0" data-topic-tab="sector">ویژهٔ سکتور</button>
         <button type="button" role="tab" id="topic-tab-export-readiness" aria-controls="topic-export-readiness" aria-selected="false" tabindex="-1" data-topic-tab="export-readiness">آمادگی صادراتی</button>
@@ -147,6 +147,26 @@
     </div>
   </section>
 
+  <!-- ── About B2B meetings and investor matchmaking: shown instead of the
+       training topics when the Event type filter is set to one of them
+       (js/events.js) ── -->
+  <section class="topics" data-about-type="b2b" aria-labelledby="about-b2b-title" hidden>
+    <div class="container">
+      <h2 class="topics__title" id="about-b2b-title">جلسات B2B</h2>
+      <div class="topics__panel topics__panel--single">
+        <div class="topics__about"><p>برنامهٔ جلسات B2B تشبثات کوچک و متوسط، خریداران، تأمین‌کنندگان و شرکای نهادی را در جلسات منظم شبکه‌سازی تجاری گرد هم می‌آورد. این جلسات برای ایجاد شراکت‌های تجاری تازه، پیوندهای بازار و فرصت‌های همکاری در سکتورهای مختلف طراحی شده‌اند.</p></div>
+      </div>
+    </div>
+  </section>
+  <section class="topics" data-about-type="matchmaking" aria-labelledby="about-matchmaking-title" hidden>
+    <div class="container">
+      <h2 class="topics__title" id="about-matchmaking-title">ارتباط‌دهی با سرمایه‌گذاران</h2>
+      <div class="topics__panel topics__panel--single">
+        <div class="topics__about"><p>خدمت ارتباط‌دهی با سرمایه‌گذاران، تشبثات کوچک و متوسطِ آماده برای سرمایه‌گذاری را با سرمایه‌گذارانی وصل می‌کند که اولویت‌های‌شان با سکتور، مرحلهٔ رشد و نیازهای مالی این تشبثات همخوانی دارد. مرکز این روند را تسهیل می‌کند تا دسترسی به تمویل و رشد پایدار کسب‌وکار را حمایت کند.</p></div>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Filters ─────────────────────────────────────────────────────────── -->
   <div class="container">
     <div class="filters" id="filters">
@@ -156,11 +176,11 @@
           <button type="button" class="chip" data-type="all" aria-pressed="true">همه</button>
           <button type="button" class="chip" data-type="training" aria-pressed="false">آموزش</button>
           <button type="button" class="chip" data-type="b2b" aria-pressed="false">B2B</button>
-          <button type="button" class="chip" data-type="matchmaking" aria-pressed="false">ارتباط‌دهی</button>
+          <button type="button" class="chip" data-type="matchmaking" aria-pressed="false">ارتباط‌دهی با سرمایه‌گذاران</button>
         </div>
       </fieldset>
       <fieldset class="filter">
-        <legend class="filter__label">موضوع آموزشی</legend>
+        <legend class="filter__label">دسته‌بندی دوره‌ها</legend>
         <div class="chips">
           <button type="button" class="chip" data-topic="sector" aria-pressed="false">ویژهٔ سکتور</button>
           <button type="button" class="chip" data-topic="export-readiness" aria-pressed="false">آمادگی صادراتی</button>
@@ -299,14 +319,14 @@
           <ul class="site-footer__links">
             <li><a href="events.html?type=training">آموزش‌ها</a></li>
             <li><a href="events.html?type=b2b">جلسات B2B</a></li>
-            <li><a href="events.html">ارتباط‌دهی با سرمایه‌گذاران</a></li>
+            <li><a href="events.html?type=matchmaking">ارتباط‌دهی با سرمایه‌گذاران</a></li>
             <li><a href="/app">ابزار معلومات بازار</a></li>
           </ul>
         </div>
       </nav>
     </div>
 
-    <div class="site-footer__bottom">© 2026 مرکز حمایت از تشبثات کوچک و متوسط · <span class="is-soon" title="به زودی">حریم خصوصی</span></div>
+    <div class="site-footer__bottom">© 2026 مرکز حمایت از تشبثات کوچک و متوسط</div>
   </div>
 </footer>
 
