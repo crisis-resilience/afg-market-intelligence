@@ -6,18 +6,20 @@ A market discovery platform that helps Afghan businesses and UNDP trade analysts
 
 A user selects a product (by HS code or name), and the tool returns a ranked list of markets scored by a composite **Opportunity Score** (0–100). Each market is scored across eight dimensions:
 
-| Dimension | Weight | Source |
+| Dimension | Default weight | Source |
 |-----------|--------|--------|
-| Market size (global imports of this product) | 20% | UN Comtrade |
-| Market growth (CAGR of Afghanistan's exports to this market) | 18% | UN Comtrade (mirror stats) |
-| Market quality (governance, logistics) | 13% | World Bank WDI/WGI |
-| Price competitiveness | 13% | UN Comtrade |
-| Tariff rate on Afghan goods | 12% | WITS (World Bank) |
-| Existing Afghan foothold | 10% | UN Comtrade (mirror stats) |
-| Geographic proximity to Kabul | 10% | CEPII GeoDist |
-| Language / cultural similarity | 4% | DICL |
+| Market size (global imports of this product) | 12.5% | UN Comtrade |
+| Market growth (CAGR of Afghanistan's exports to this market) | 12.5% | UN Comtrade (mirror stats) |
+| Market quality (governance, logistics) | 12.5% | World Bank WDI/WGI |
+| Price competitiveness | 12.5% | UN Comtrade |
+| Tariff rate on Afghan goods | 12.5% | WITS (World Bank) |
+| Existing Afghan foothold | 12.5% | UN Comtrade (mirror stats) |
+| Geographic proximity to Kabul | 12.5% | CEPII GeoDist |
+| Language / cultural similarity | 12.5% | DICL |
 
-**FTA / preferential trade access is computed and stored but deliberately not weighted.** WITS's Afghanistan-specific (`partner=004`) tariff schedule returns "NoRecordsFound" for effectively every reporter, so `has_fta` is false for ~100% of rows — a weight that could never move the score. Its former 2% share was folded into Tariff (10% → 12%). See the comment on `OPPORTUNITY_SCORE_WEIGHTS` in `config.py`.
+All eight count equally by default. Users can change how much each one matters on the Compare-markets page ("Customise the ranking and set your priorities"), and the markets re-rank instantly in the browser.
+
+**FTA / preferential trade access is computed and stored but deliberately not weighted.** WITS's Afghanistan-specific (`partner=004`) tariff schedule returns "NoRecordsFound" for effectively every reporter, so `has_fta` is false for ~100% of rows — a weight that could never move the score. See the comment on `OPPORTUNITY_SCORE_WEIGHTS` in `config.py`.
 
 A dimension whose underlying data is genuinely missing scores `NULL` rather than defaulting to a neutral 50; it is dropped from the composite and the remaining weights are renormalised to sum to 1.0.
 

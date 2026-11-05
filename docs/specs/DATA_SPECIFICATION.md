@@ -290,22 +290,22 @@ Downstream effects: `unit_price_usd`, `market_avg_price_usd`, `price_vs_market_p
 
 ### 4.6 Opportunity score computation
 
-Each of eight dimensions is normalised to 0–100, then combined as a weighted sum:
+Each of eight dimensions is normalised to 0–100, then combined as a weighted sum. By default all eight count equally:
 
-| Dimension | Weight | Normalisation method |
+| Dimension | Default weight | Normalisation method |
 |---|---|---|
-| Market size | 20% | Log min-max vs. a fixed floor F: `100 × ln(size/F) / ln(max_size/F)` across all markets for the product — see below |
-| Market growth | 18% | Min-max vs. a fixed symmetric band ±W: `50 + cagr_pct × (50/W)`, clamped [0,100] — see below |
-| Market quality | 13% | Average of available sub-scores (LPI, regulatory quality, political stability) — see below |
-| Price competitiveness | 13% | Label-based: Substantially Below Market=100, Below Market=75, Near Market=50, Above Market=25 |
-| Tariff | 12% | Log min-max vs. a fixed ceiling: `100 × (1 − log1p(rate)/log1p(35))`, clamped [0,100] — see below |
-| Afghan foothold | 10% | Per-product log min-max: `100 × log1p(x) / log1p(max_x_for_product)` — see below |
-| Distance | 10% | Log min-max vs. a fixed ceiling: `100 × (1 − log1p(dist_km)/log1p(20015))`, closer = higher — see below |
-| Language | 4% | `similarity × 100` (0.0–1.0 lookup) |
+| Market size | 12.5% | Log min-max vs. a fixed floor F: `100 × ln(size/F) / ln(max_size/F)` across all markets for the product — see below |
+| Market growth | 12.5% | Min-max vs. a fixed symmetric band ±W: `50 + cagr_pct × (50/W)`, clamped [0,100] — see below |
+| Market quality | 12.5% | Average of available sub-scores (LPI, regulatory quality, political stability) — see below |
+| Price competitiveness | 12.5% | Label-based: Substantially Below Market=100, Below Market=75, Near Market=50, Above Market=25 |
+| Tariff | 12.5% | Log min-max vs. a fixed ceiling: `100 × (1 − log1p(rate)/log1p(35))`, clamped [0,100] — see below |
+| Afghan foothold | 12.5% | Per-product log min-max: `100 × log1p(x) / log1p(max_x_for_product)` — see below |
+| Distance | 12.5% | Log min-max vs. a fixed ceiling: `100 × (1 − log1p(dist_km)/log1p(20015))`, closer = higher — see below |
+| Language | 12.5% | `similarity × 100` (0.0–1.0 lookup) |
 
-Weights must sum to 1.0 (enforced in `config.py`).
+Weights must sum to 1.0 (enforced in `config.py`). The ETL stores `opportunity_score` with these default weights (`config.OPPORTUNITY_SCORE_WEIGHTS`). The app recalculates the score in the browser from the eight stored dimension scores, so users can re-weight the dimensions (Ignore / Less important / Important / Very important; default equal) — see `frontend/lib/scoring.ts`. A dimension with no data is left out and the remaining weights renormalised, in both places. Until 2026-11 the ETL weights were unequal (20/18/13/13/12/10/10/4%); scores stored before the next ETL run still use them.
 
-**FTA access (`score_fta`) is computed but excluded from the composite.** WITS's AFG-specific (`partner=004`) tariff schedule returns "NoRecordsFound" for every reporter checked, so `has_fta` is `False` and `score_fta` is 0 for essentially every row — a weight that could never move the score. Its former 2% share was folded into Tariff (10% → 12%) above. `has_fta`/`score_fta` are still computed per row and stored in `indicators` in case WITS's coverage improves, and remain available via the API, but are no longer part of `opportunity_score` and are not shown in the frontend's score breakdown.
+**FTA access (`score_fta`) is computed but excluded from the composite.** WITS's AFG-specific (`partner=004`) tariff schedule returns "NoRecordsFound" for every reporter checked, so `has_fta` is `False` and `score_fta` is 0 for essentially every row — a weight that could never move the score. `has_fta`/`score_fta` are still computed per row and stored in `indicators` in case WITS's coverage improves, and remain available via the API, but are no longer part of `opportunity_score` and are not shown in the frontend's score breakdown.
 
 **Missing data handling — three distinct treatments, not one rule:**
 - **Neutral-50 default** (`_score_price`): the dimension genuinely can't be evaluated, so it's scored as neutral rather than guessed good or bad, and the composite is still calculated as normal.
