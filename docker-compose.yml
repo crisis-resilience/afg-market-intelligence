@@ -48,6 +48,9 @@ services:
         condition: service_healthy
     volumes:
       - ./indicator_definitions.json:/app/indicator_definitions.json:ro
+      # WITS tariff cache (gitignored). The image's /app is read-only to the
+      # app user, so without this mount the cache can't be saved between runs.
+      - ./etl/.cache:/app/etl/.cache
 
   frontend:
     build:
