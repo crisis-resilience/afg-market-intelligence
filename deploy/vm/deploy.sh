@@ -66,6 +66,13 @@ SITE_ADDRESS="$(read_env SITE_ADDRESS)"
   || fail "COMTRADE_API_KEY is missing or still set to the placeholder"
 [[ "$SITE_ADDRESS" == https://* ]] \
   || fail "SITE_ADDRESS must be an https:// URL in production"
+WEBSITE_ADDRESS="$(read_env WEBSITE_ADDRESS)"
+if [ -n "$WEBSITE_ADDRESS" ]; then
+  [[ "$WEBSITE_ADDRESS" == https://* ]] \
+    || fail "WEBSITE_ADDRESS must be an https:// URL (or left out)"
+  [ "${WEBSITE_ADDRESS%/}" != "${SITE_ADDRESS%/}" ] \
+    || fail "WEBSITE_ADDRESS must be a different hostname from SITE_ADDRESS"
+fi
 
 # Where to probe for health. This has to follow SITE_ADDRESS: once a domain is
 # configured Caddy serves only that hostname and redirects HTTP to HTTPS, so a

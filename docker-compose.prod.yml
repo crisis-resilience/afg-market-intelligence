@@ -43,9 +43,15 @@ services:
       # acceptable only for a throwaway demo -- Let's Encrypt cannot issue for
       # a bare IP address.
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS to an https URL in .env — see docs/VM_DEPLOYMENT.md}
+      # Optional: the public website (site/) on its own hostname. Unset means
+      # a name nobody outside the VM can reach, so the website is not served.
+      WEBSITE_ADDRESS: ${WEBSITE_ADDRESS:-http://website.localhost}
     logging: *default-logging
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # The website's files, from the commit deploy.sh checked out -- so the
+      # website and the app always come from the same commit.
+      - ./site:/srv/site:ro
       # MUST persist: these hold the issued certificates and the ACME account
       # key. Losing them re-requests certs on every deploy, which hits Let's
       # Encrypt's rate limits fast.
@@ -156,6 +162,9 @@ services:
       # routed by Caddy straight to the backend and never passes through here.
       BACKEND_URL: http://backend:8000
       NODE_ENV: production
+      # Where the app's header and footer link back to (frontend/lib/site.ts).
+      # Empty falls back to the default there.
+      SITE_URL: ${WEBSITE_ADDRESS:-}
     read_only: true
     # Next's server writes its runtime cache (optimized images from
     # /_next/image, plus fetch/ISR data) under /app/.next/cache. On a read-only

@@ -135,6 +135,21 @@ When you set a domain, set the `SITE_URL` repository variable to the same URL â€
 CI's post-deploy probe uses it, and falls back to `http://<VM_HOST>`, which stops
 working the moment Caddy starts redirecting HTTP to HTTPS.
 
+### The website on the same VM (optional)
+
+Caddy can also serve the public website (`site/`) under a second hostname that
+points at the same VM. Add it to `.env`:
+
+```bash
+WEBSITE_ADDRESS=https://afg-website.example.org
+```
+
+Caddy gets a certificate for that name too; the website's "Market Intelligence
+Tool" links (`/app`) redirect to `SITE_ADDRESS`, and the app's header and footer
+link back to `WEBSITE_ADDRESS`. The website files come from the deployed commit,
+so they update with every deploy. Leave `WEBSITE_ADDRESS` out to host the
+website elsewhere; `site/_headers` and `site/_redirects` cover Cloudflare Pages.
+
 ---
 
 ## 6. Deploy keys and GitHub configuration
