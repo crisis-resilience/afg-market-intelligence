@@ -66,3 +66,44 @@
 		reverse_proxy frontend:3000
 	}
 }
+
+# =============================================================================
+# The public website (site/ in this repo), served from the same VM
+# =============================================================================
+# WEBSITE_ADDRESS (in .env) is the website's own address, e.g.
+# https://afg-website.example.org. It must be a different hostname from
+# SITE_ADDRESS -- Caddy picks the site by the name the visitor typed, and gets
+# a certificate for each name. When it is not set, docker-compose.prod.yml
+# fills in http://website.localhost, a name nobody outside the VM can reach,
+# so this block is inert.
+#
+# The headers and the /app redirect mirror site/_headers and site/_redirects,
+# which are kept for hosting the website on Cloudflare Pages instead.
+{$WEBSITE_ADDRESS} {
+	encode gzip zstd
+
+	header {
+		-Server
+		# Plain files only: no inline scripts or styles. Fonts come from Google
+		# Fonts, and the Events page reads seat counts from the registration
+		# sheet's Google Apps Script. Add a new third-party origin here first.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://script.google.com https://script.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	# Every "Market Intelligence Tool" link on the website points at /app.
+	# 302 so browsers don't cache it and the app's address can change.
+	redir /app {$SITE_ADDRESS}/ 302
+	redir /app/ {$SITE_ADDRESS}/ 302
+
+	# Cloudflare-only config files: not part of the website.
+	@cloudflare path /_headers /_redirects
+	respond @cloudflare 404
+
+	root * /srv/site
+	file_server
+}

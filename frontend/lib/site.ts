@@ -1,8 +1,9 @@
-// The public website (site/ in this repo, hosted separately on Cloudflare
-// Pages) that this app's header and footer link back to.
+// The public website (site/ in this repo, served by Caddy on the same VM or
+// hosted separately) that this app's header and footer link back to.
 //
-// The SITE_URL environment variable sets it; the dev docker-compose.yml points
-// it at the local website preview (scripts/serve_site.py). Without it, links
+// The SITE_URL environment variable sets it: docker-compose.prod.yml fills it
+// from WEBSITE_ADDRESS, and the dev docker-compose.yml points it at the local
+// website preview (scripts/serve_site.py). Without it, links
 // go to DEFAULT_SITE_URL — change that here when the real domain is known.
 //
 // Read on the server at request time, so the same built image works with any
