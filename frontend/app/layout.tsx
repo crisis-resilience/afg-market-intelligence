@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google'
 import './globals.css'
+import BackToTop from '@/components/BackToTop'
 
 // Self-hosted by next/font, so the browser never calls Google (the Caddy CSP
 // only allows fonts from this origin).
@@ -22,6 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <p className="m-0 mx-auto w-full max-w-[1440px] px-5 sm:px-10 xl:px-16 py-6 text-xs text-muted">
           Data: UN Comtrade (mirror statistics) · World Bank WDI/WGI · WITS tariffs
         </p>
+        <BackToTop />
       </body>
     </html>
   )

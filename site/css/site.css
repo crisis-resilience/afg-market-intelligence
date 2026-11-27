@@ -826,3 +826,19 @@ html[lang="fa-AF"], html[lang="ps"] {
   [dir="rtl"] .page-banner__shade { background: linear-gradient(to left, rgba(35,46,61,.85), rgba(35,46,61,.6)); }
 }
 
+
+/* ── Back to top (button is added by js/site.js) ───────────────────────────── */
+.back-to-top {
+  position: fixed; bottom: 24px; inset-inline-end: 24px; z-index: 50;
+  width: 48px; height: 48px; border-radius: 50%; border: 0; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--blue); color: var(--white); cursor: pointer;
+  box-shadow: 0 2px 8px rgba(35,46,61,.25);
+  opacity: 0; visibility: hidden; transform: translateY(8px);
+  transition: opacity .2s ease, transform .2s ease, visibility .2s, background-color .2s ease;
+}
+.back-to-top.is-visible { opacity: 1; visibility: visible; transform: none; }
+.back-to-top:hover { background: var(--blue-dark); }
+.back-to-top:focus-visible { outline: 2px solid var(--blue-dark); outline-offset: 3px; }
+@media (max-width: 760px) { .back-to-top { bottom: 16px; inset-inline-end: 16px; width: 44px; height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .back-to-top { transition: none; } }
