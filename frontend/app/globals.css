@@ -77,3 +77,7 @@ body {
   .frosted-background > img { opacity: 1; }
 }
 .frosted-background > :not(img) { position: relative; z-index: 10; }
+
+/* In-page links (e.g. "How to read this page") land below the sticky tool header */
+html { scroll-padding-top: 88px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }

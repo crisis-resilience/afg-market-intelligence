@@ -8,6 +8,7 @@ import {
 import ScoreBar from '@/components/ScoreBar'
 import NextSteps, { ExternalLink } from '@/components/NextSteps'
 import InfoTooltip from '@/components/InfoTooltip'
+import { HelpHeading, HelpPanel, HOW_TO_READ_ID } from '@/components/HelpBox'
 import PriceComparison from '@/components/PriceComparison'
 import { Breadcrumb, PortPhoto, ToolSteps } from '@/components/ToolChrome'
 import {
@@ -113,6 +114,71 @@ export default async function MarketProfilePage(
             <p className="on-photo text-lg leading-[1.5] text-white m-0">
               {productName} · <span className="font-mono text-base">HS {hs_code}</span>
             </p>
+            {/* Opens as a side panel over the page; card 1 of the next steps opens it too */}
+            <HelpPanel id={HOW_TO_READ_ID} title="How to read this page">
+              <p className="m-0">
+                This page has {profile.next_steps.length > 0 ? 'six' : 'five'} sections that take you from how
+                promising {market} is for {product}, through price, market conditions{profile.next_steps.length > 0 ? ' and what to do next' : ''},
+                to what drives the score and who you will compete with. Click a title to go straight to that section.
+              </p>
+              {/* One line per section; each heading jumps to its section */}
+              {[
+                {
+                  id: 'attractive',
+                  title: `How attractive is ${markets} market?`,
+                  text: `This section shows the market size, Afghan export growth, Afghanistan’s market share and supplier rank, which tell you how big the demand for ${product} is, whether it is growing, and how well Afghan products already sell there.`,
+                },
+                {
+                  id: 'price',
+                  title: 'Is Afghanistan’s price competitive?',
+                  text: `Here you can compare the Afghan price with what ${market} pays its other suppliers, to see whether you can compete on price.`,
+                },
+                {
+                  id: 'access',
+                  title: `Market overview of ${market}`,
+                  text: `This part looks at the import tariff, logistics, regulatory quality, political stability and income level of ${market}, which tell you how easy and safe it is to sell and ship there.`,
+                },
+                ...(profile.next_steps.length > 0
+                  ? [{
+                      id: 'next-steps',
+                      title: 'Recommended next steps',
+                      text: 'Follow this step-by-step plan, from research and rules to documents and customs, to know what to do next to start exporting.',
+                    }]
+                  : []),
+                {
+                  id: 'why',
+                  title: 'Why this score?',
+                  text: `Here you will see the eight factors behind the opportunity score and how each one scored for ${market}, which explains why this market ranks where it does.`,
+                },
+                {
+                  id: 'competitors',
+                  title: 'Top competitors in this market',
+                  text: `Find out which countries sell the most of this product in ${market} and how big their share is, so you know who you will compete with.`,
+                },
+              ].map((s, i) => (
+                <div key={s.id} className="flex flex-col gap-1">
+                  <HelpHeading>
+                    <a href={`#${s.id}`} className="text-undp no-underline hover:underline">
+                      {i + 1}. {s.title}
+                    </a>
+                  </HelpHeading>
+                  <p className="m-0">{s.text}</p>
+                </div>
+              ))}
+              <details className="group/notes mt-1 border-t border-soft pt-2.5">
+                <summary className="cursor-pointer text-[13px] font-medium text-undp">Notes</summary>
+                <ul className="list-disc m-0 mt-2 pl-5 flex flex-col gap-1.5 text-[13.5px] text-muted">
+                  <li>
+                    The tariff in the market overview is an average from older data (WITS). The duty you will actually pay is
+                    in card 2 of the next steps.
+                  </li>
+                  <li>
+                    Competitor details are only available for the 10 largest import markets of each product. For other
+                    countries, that section shows a short note instead.
+                  </li>
+                </ul>
+              </details>
+            </HelpPanel>
           </div>
           <div className={`self-start shrink-0 flex flex-col gap-2 bg-[rgba(35,46,61,.7)] border-l-4 ${level ? SCORE_ACCENT[level] : 'border-grey'} px-[22px] pt-4 pb-[18px]`}>
             <span className="text-xs font-semibold tracking-[0.08em] uppercase text-white/80">Opportunity score</span>
@@ -411,7 +477,7 @@ export default async function MarketProfilePage(
 
       <Band tone="grey">
         {/* ── Competitors ───────────────────────────────────────────────────── */}
-        <div className="pt-2 pb-16">
+        <div id="competitors" className="pt-2 pb-16">
         <Panel title="Top competitors in this market">
           {/* The ETL stores competitor lists only for each product's largest
               import markets (config.TOP_N_MARKETS); say so rather than hide
