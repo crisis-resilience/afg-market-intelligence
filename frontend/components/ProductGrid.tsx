@@ -105,11 +105,6 @@ function ProductCard({ product }: { product: ProductSummary }) {
     <li className="bg-white border border-line rounded-md p-[22px] flex flex-col gap-3.5 min-h-[262px]">
       <div className="flex justify-between items-start gap-2">
         <span className="text-[11.5px] font-semibold text-undp bg-blue-tint px-[9px] py-[3px] rounded-[3px]">{product.category}</span>
-        {product.has_data ? (
-          <span className="text-[11.5px] font-medium text-green bg-green-tint px-[9px] py-[3px] rounded-[3px] whitespace-nowrap">Data available</span>
-        ) : (
-          <span className="text-[11.5px] text-muted bg-soft px-[9px] py-[3px] rounded-[3px] whitespace-nowrap">No data yet</span>
-        )}
       </div>
 
       <div className="flex flex-col gap-1">

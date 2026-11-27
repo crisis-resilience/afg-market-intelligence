@@ -88,3 +88,33 @@
     });
   }
 })();
+
+// ── Back to top ──────────────────────────────────────────────────────────────
+// A round button in the bottom corner that appears once the reader has
+// scrolled down a screen. Built here so every page gets it without HTML edits.
+(function () {
+  'use strict';
+
+  var labels = { fa: 'بازگشت به بالا', ps: 'بېرته پورته' };
+  var lang = (document.documentElement.lang || 'en').slice(0, 2);
+  var label = labels[lang] || 'Back to top';
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'back-to-top';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+  btn.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  document.body.appendChild(btn);
+
+  function update() {
+    btn.classList.toggle('is-visible', window.scrollY > window.innerHeight);
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+
+  btn.addEventListener('click', function () {
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  });
+})();

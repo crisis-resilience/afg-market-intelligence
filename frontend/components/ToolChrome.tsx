@@ -8,8 +8,26 @@ import { siteLink } from '@/lib/site'
 
 const STEPS = ['Choose a product', 'Compare markets', 'Market profile'] as const
 
-/** Step bar. `links` holds the href for each step already passed. */
-export function ToolSteps({ current, links = [] }: { current: 1 | 2 | 3; links?: string[] }) {
+export const HOW_TO_USE_HREF = '/how-to-use'
+const HOW_TO_USE = 'How to use this tool'
+
+function QuestionIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4.5" />
+      <path d="M12 18.5v.01" />
+    </svg>
+  )
+}
+
+/** Step bar, with a "How to use this tool" button before the steps. `current` is the step being
+ *  shown (0 = the how-to-use page); `links` holds the href for each step
+ *  already passed. From the how-to-use page, step 1 is a link to start. */
+export function ToolSteps({ current, links = [] }: { current: 0 | 1 | 2 | 3; links?: string[] }) {
+  // A pill, not a numbered circle, so it doesn't read as a step of the chain
+  const guideCls = `inline-flex items-center gap-1.5 h-8 pl-3.5 pr-2.5 rounded-full border-[1.5px] border-undp text-sm font-medium no-underline whitespace-nowrap transition-colors ${
+    current === 0 ? 'bg-undp text-white' : 'bg-white text-undp hover:bg-blue-wash'
+  }`
   return (
     <div className="sticky top-0 z-20 bg-white border-b border-line">
       <div className="mx-auto max-w-[1440px] px-5 sm:px-10 xl:px-16 py-3.5 flex items-center gap-7">
@@ -26,6 +44,13 @@ export function ToolSteps({ current, links = [] }: { current: 1 | 2 | 3; links?:
         </a>
         <span className="-ml-4 text-sm font-semibold whitespace-nowrap">Market Intelligence Tool</span>
         <span className="hidden md:block w-px h-6 bg-line" aria-hidden="true" />
+        {/* Help, set apart from the steps by its own dividers */}
+        {current === 0 ? (
+          <span className={`hidden md:inline-flex ${guideCls}`} aria-current="page">{HOW_TO_USE}<QuestionIcon /></span>
+        ) : (
+          <Link href={HOW_TO_USE_HREF} className={`hidden md:inline-flex ${guideCls}`}>{HOW_TO_USE}<QuestionIcon /></Link>
+        )}
+        <span className="hidden md:block w-px h-6 bg-line" aria-hidden="true" />
         <ol className="hidden md:flex items-center gap-3.5 list-none m-0 p-0" aria-label="Steps">
           {STEPS.map((label, i) => {
             const n = (i + 1) as 1 | 2 | 3
@@ -33,7 +58,7 @@ export function ToolSteps({ current, links = [] }: { current: 1 | 2 | 3; links?:
             const isCurrent = n === current
             const marker = done ? (
               <span className="w-6 h-6 rounded-full border-[1.5px] border-undp inline-flex items-center justify-center">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#006EB5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>
               </span>
             ) : (
               <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center font-mono text-xs ${isCurrent ? 'bg-undp text-white font-medium' : 'border-[1.5px] border-grey text-muted'}`}>
@@ -46,14 +71,16 @@ export function ToolSteps({ current, links = [] }: { current: 1 | 2 | 3; links?:
                 {label}
               </>
             )
+            // From the how-to-use page, step 1 is where to start
+            const href = current === 0 && n === 1 ? '/' : done ? links[i] : undefined
             const cls = `flex items-center gap-2.5 text-sm no-underline ${
-              done ? 'font-medium text-undp hover:underline' : isCurrent ? 'font-semibold text-ink' : 'text-muted'
+              href ? 'font-medium text-undp hover:underline' : isCurrent ? 'font-semibold text-ink' : 'text-muted'
             }`
             return (
               <li key={label} className="flex items-center gap-3.5">
                 {i > 0 && <span className="w-12 h-px bg-line" aria-hidden="true" />}
-                {done && links[i] ? (
-                  <Link href={links[i]} className={cls}>{content}</Link>
+                {href ? (
+                  <Link href={href} className={cls}>{content}</Link>
                 ) : (
                   <span className={cls} aria-current={isCurrent ? 'step' : undefined}>{content}</span>
                 )}
@@ -61,10 +88,20 @@ export function ToolSteps({ current, links = [] }: { current: 1 | 2 | 3; links?:
             )
           })}
         </ol>
-        {/* Phones: just say where you are */}
+        {/* Phones: say where you are, with a round "?" for the how-to-use page */}
         <span className="md:hidden ml-auto text-[13px] text-muted whitespace-nowrap">
-          Step {current} of 3 · {STEPS[current - 1]}
+          {current === 0 ? HOW_TO_USE : `Step ${current} of 3 · ${STEPS[current - 1]}`}
         </span>
+        {current !== 0 && (
+          <Link
+            href={HOW_TO_USE_HREF}
+            title={HOW_TO_USE}
+            aria-label={HOW_TO_USE}
+            className="md:hidden shrink-0 -ml-4 w-8 h-8 rounded-full border-[1.5px] border-undp text-undp inline-flex items-center justify-center"
+          >
+            <QuestionIcon size={16} />
+          </Link>
+        )}
       </div>
     </div>
   )

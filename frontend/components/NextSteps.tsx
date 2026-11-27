@@ -8,9 +8,9 @@ import type { NextStep, StepLink } from '@/lib/types'
 //
 // Shown as a deck: the current step's card in front, the next ones peeking out
 // behind it like a stack of pages, earlier ones slid away to the left. The
-// UNDP pagination under it, a click on a peeking card, or the arrow keys move
-// through it. All cards share one grid cell, so the deck is as tall as the
-// longest step and doesn't jump between steps.
+// step bar under it (arrows plus a button per step), a click on a peeking
+// card, or the arrow keys move through it. All cards share one grid cell, so
+// the deck is as tall as the longest step and doesn't jump between steps.
 
 const PEEK_PX = 14 // offset of each card behind the current one
 const MAX_PEEK = 2 // cards visible behind the current one
@@ -62,23 +62,58 @@ export default function NextSteps({ steps }: { steps: NextStep[] }) {
         })}
       </ol>
 
-      {/* UNDP Design System pagination (2.0.3, MIT licence): circled arrows
-          around "Page n of N"; an arrow fades when there is no page that way. */}
-      <nav aria-label="Steps" className="mt-5">
-        <ul className="flex items-center gap-6 list-none m-0 p-0 text-base text-black">
-          <li className="flex">
-            <PageArrow direction="previous" disabled={current === 0} onClick={() => go(current - 1)} />
-          </li>
-          <li className="flex" aria-live="polite">
-            Page<span className="mx-1.5 font-semibold">{current + 1}</span>of
-            <span className="ml-1.5 font-semibold">{steps.length}</span>
-          </li>
-          <li className="flex">
-            <PageArrow direction="next" disabled={current === last} onClick={() => go(current + 1)} />
-          </li>
-        </ul>
-      </nav>
+      <StepPager steps={steps} current={current} go={go} className="mt-5" />
+      <p className="sr-only" aria-live="polite">
+        Step {current + 1} of {steps.length}
+      </p>
     </div>
+  )
+}
+
+// UNDP Design System pagination (2.0.3, MIT licence): circled arrows, with a
+// numbered button for every step between them so any step is one click away;
+// an arrow fades when there is no step that way.
+function StepPager({
+  steps,
+  current,
+  go,
+  className = '',
+}: {
+  steps: NextStep[]
+  current: number
+  go: (i: number) => void
+  className?: string
+}) {
+  const last = steps.length - 1
+  return (
+    <nav aria-label="Steps" className={className}>
+      <ul className="flex flex-wrap items-center gap-2 list-none m-0 p-0 text-base text-black">
+        <li className="flex mr-2">
+          <PageArrow direction="previous" disabled={current === 0} onClick={() => go(current - 1)} />
+        </li>
+        {steps.map((step, i) => (
+          <li key={step.order} className="flex">
+            <button
+              type="button"
+              onClick={() => go(i)}
+              aria-current={i === current ? 'step' : undefined}
+              aria-label={`Step ${step.order}: ${step.title}`}
+              title={step.title}
+              className={`w-9 h-9 p-0 rounded-full font-mono text-[15px] font-medium cursor-pointer transition-colors ${
+                i === current
+                  ? 'bg-undp text-white border border-undp'
+                  : 'bg-white text-ink border border-line hover:border-undp hover:text-undp'
+              }`}
+            >
+              {step.order}
+            </button>
+          </li>
+        ))}
+        <li className="flex ml-2">
+          <PageArrow direction="next" disabled={current === last} onClick={() => go(current + 1)} />
+        </li>
+      </ul>
+    </nav>
   )
 }
 

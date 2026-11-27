@@ -9,7 +9,7 @@
   --color-line: #D4D6D8;
   --color-soft: #EDEFF0;
   --color-paper: #F7F7F7;
-  --color-undp: #0468B1;
+  --color-undp: #006EB5;
   --color-undp-dark: #1F5A95;
   --color-blue-tint: #B5D5F5;
   --color-blue-wash: #EAF2FA;   /* light band background (market profile) */
@@ -77,3 +77,7 @@ body {
   .frosted-background > img { opacity: 1; }
 }
 .frosted-background > :not(img) { position: relative; z-index: 10; }
+
+/* In-page links (e.g. "How to read this page") land below the sticky tool header */
+html { scroll-padding-top: 88px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
