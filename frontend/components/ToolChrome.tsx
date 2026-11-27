@@ -33,7 +33,7 @@ export function ToolSteps({ current, links = [] }: { current: 1 | 2 | 3; links?:
             const isCurrent = n === current
             const marker = done ? (
               <span className="w-6 h-6 rounded-full border-[1.5px] border-undp inline-flex items-center justify-center">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0468B1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#006EB5" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7" /></svg>
               </span>
             ) : (
               <span className={`w-6 h-6 rounded-full inline-flex items-center justify-center font-mono text-xs ${isCurrent ? 'bg-undp text-white font-medium' : 'border-[1.5px] border-grey text-muted'}`}>

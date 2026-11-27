@@ -2,7 +2,7 @@
 
 function Icon({ children }: { children: React.ReactNode }) {
   return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="#0468B1" strokeWidth="1.6" strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true">
+    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="#006EB5" strokeWidth="1.6" strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true">
       {children}
     </svg>
   )
@@ -85,7 +85,7 @@ export function ShareRing({ pct }: { pct: number | null }) {
     <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true">
       <circle cx="20" cy="20" r="15" fill="none" stroke="#EDEFF0" strokeWidth="6" />
       <circle
-        cx="20" cy="20" r="15" fill="none" stroke="#0468B1" strokeWidth="6"
+        cx="20" cy="20" r="15" fill="none" stroke="#006EB5" strokeWidth="6"
         strokeDasharray={`${filled.toFixed(2)} ${circumference.toFixed(2)}`}
         transform="rotate(-90 20 20)"
       />
