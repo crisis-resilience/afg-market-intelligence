@@ -417,19 +417,23 @@ export default async function MarketProfilePage(
               id="next-steps"
               title="Recommended next steps"
               lead={`What to do to export ${product} to ${market}, step by step, with links to the details.`}
+              aside={
+                (profile.next_steps_more || profile.next_steps_disclaimer) && (
+                  <div className="flex flex-col gap-2">
+                    {profile.next_steps_more && (
+                      <p className="m-0">
+                        <ExternalLink link={profile.next_steps_more} strong />
+                      </p>
+                    )}
+                    {profile.next_steps_disclaimer && (
+                      <p className="text-xs leading-[1.5] text-muted m-0">{profile.next_steps_disclaimer}</p>
+                    )}
+                  </div>
+                )
+              }
             >
-              <div className="mt-6 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8 items-start">
+              <div className="mt-6">
                 <NextSteps steps={profile.next_steps} />
-                <div className="flex flex-col gap-5">
-                  {profile.next_steps_more && (
-                    <p className="m-0">
-                      <ExternalLink link={profile.next_steps_more} strong />
-                    </p>
-                  )}
-                  {profile.next_steps_disclaimer && (
-                    <p className="text-xs leading-[1.5] text-muted m-0">{profile.next_steps_disclaimer}</p>
-                  )}
-                </div>
               </div>
             </Section>
           </div>
@@ -540,12 +544,29 @@ function Band({ tone, children }: { tone: keyof typeof BAND_TONES; children: Rea
   )
 }
 
-function Section({ id, title, lead, children }: { id: string; title: string; lead: string; children: React.ReactNode }) {
+function Section({ id, title, lead, aside, children }: {
+  id: string
+  title: string
+  lead: string
+  /** Shown to the right of the title and lead on wide screens, below them on narrow ones. */
+  aside?: React.ReactNode
+  children: React.ReactNode
+}) {
+  const heading = (
+    <div>
+      <h2 id={id} className="text-[28px] font-semibold tracking-[-0.02em] m-0">{title}</h2>
+      <p className="text-base leading-[1.5] text-muted mt-2 mb-0 max-w-[760px]">{lead}</p>
+    </div>
+  )
   return (
     <section className="pt-2 pb-14" aria-labelledby={id}>
       <div className="border-t-[3px] border-undp pt-[22px]">
-        <h2 id={id} className="text-[28px] font-semibold tracking-[-0.02em] m-0">{title}</h2>
-        <p className="text-base leading-[1.5] text-muted mt-2 mb-0 max-w-[760px]">{lead}</p>
+        {aside ? (
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5 lg:gap-12">
+            {heading}
+            <div className="lg:shrink-0 lg:w-[400px]">{aside}</div>
+          </div>
+        ) : heading}
         {children}
       </div>
     </section>
